@@ -1,95 +1,233 @@
 /* src/App.css */
-body {
-  margin: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #1e1e1e;
-  color: #fff;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+* {
+  box-sizing: border-box;
 }
 
-.app-container {
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #282828; /* Классический цвет фона Workspace Photoshop */
+  color: #d1d1d1;
+  overflow: hidden; /* Чтобы приложение не скроллилось как сайт */
+}
+
+.ps-app {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  width: 100vw;
 }
 
-header {
-  background-color: #2d2d2d;
-  padding: 1rem;
-  border-bottom: 1px solid #3d3d3d;
-}
-
-h1 {
-  margin: 0 0 1rem 0;
-  font-size: 1.2rem;
-}
-
-.toolbar {
+/* --- ВЕРХНЕЕ МЕНЮ --- */
+.ps-menubar {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  align-items: center;
+  background-color: #383838;
+  height: 32px;
+  border-bottom: 1px solid #222222;
+  padding: 0 10px;
+  font-size: 13px;
+  user-select: none;
 }
 
-button {
-  background-color: #0e639c;
-  color: white;
-  border: none;
-  padding: 8px 16px;
+.ps-menu-logo {
+  margin-right: 15px;
+  display: flex;
+  align-items: center;
+  color: #fff;
+}
+
+.ps-menu-item {
+  padding: 4px 12px;
   border-radius: 4px;
   cursor: pointer;
-  transition: 0.2s;
 }
 
-button:disabled {
-  background-color: #4d4d4d;
-  color: #888;
-  cursor: not-allowed;
+.ps-menu-item:hover {
+  background-color: #4a4a4a;
+  color: #fff;
 }
 
-button:hover:not(:disabled) {
-  background-color: #1177bb;
+/* --- ОСНОВНАЯ ЧАСТЬ (Flex-строка) --- */
+.ps-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
-input[type="file"] {
-  background-color: #333;
-  padding: 5px;
+/* --- ЛЕВЫЙ ТУЛБАР --- */
+.ps-toolbar {
+  width: 44px;
+  background-color: #383838;
+  border-right: 1px solid #222222;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+  gap: 4px;
+}
+
+.ps-tool {
+  background: transparent;
+  border: none;
+  color: #a0a0a0;
+  width: 32px;
+  height: 32px;
   border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.1s;
 }
 
-/* Обертка для канваса, делает его адаптивным */
-.canvas-wrapper {
-  flex-grow: 1;
+.ps-tool:hover {
+  background-color: #4a4a4a;
+  color: #fff;
+}
+
+.ps-tool.active {
+  background-color: #262626;
+  color: #fff;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+
+/* --- РАБОЧАЯ ОБЛАСТЬ (WORKSPACE) --- */
+.ps-workspace {
+  flex: 1;
+  background-color: #282828;
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
-  overflow: auto; /* Позволяет скроллить, если изображение очень большое, но мы используем max-width */
-  background-color: #121212;
-  /* Шахматный фон для прозрачности */
-  background-image: 
-    linear-gradient(45deg, #222 25%, transparent 25%), 
-    linear-gradient(-45deg, #222 25%, transparent 25%), 
-    linear-gradient(45deg, transparent 75%, #222 75%), 
-    linear-gradient(-45deg, transparent 75%, #222 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  overflow: auto;
+  padding: 40px;
 }
 
-/* Сам холст адаптируется под экран, не меняя реального количества пикселей! */
-.image-canvas {
+/* Обертка для канваса с шахматным фоном */
+.ps-canvas-wrapper {
+  position: relative;
+  /* Тот самый фон для прозрачности */
+  background-image: 
+    linear-gradient(45deg, #a0a0a0 25%, transparent 25%), 
+    linear-gradient(-45deg, #a0a0a0 25%, transparent 25%), 
+    linear-gradient(45deg, transparent 75%, #a0a0a0 75%), 
+    linear-gradient(-45deg, transparent 75%, #a0a0a0 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  background-color: #fff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  /* Адаптивность: не больше экрана */
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+}
+
+.ps-canvas {
+  display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  box-shadow: 0px 4px 15px rgba(0,0,0,0.5);
 }
 
-footer {
-  background-color: #007acc;
-  color: white;
-  padding: 5px 15px;
-  font-size: 0.85rem;
-}
-
-.status-bar {
+/* --- ПРАВАЯ ПАНЕЛЬ СВОЙСТВ --- */
+.ps-properties {
+  width: 260px;
+  background-color: #383838;
+  border-left: 1px solid #222222;
   display: flex;
-  gap: 15px;
+  flex-direction: column;
+}
+
+.ps-panel {
+  border-bottom: 1px solid #222222;
+}
+
+.ps-panel-header {
+  padding: 8px 12px;
+  background-color: #424242;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  border-bottom: 1px solid #303030;
+}
+
+.ps-panel-content {
+  padding: 15px;
+}
+
+.ps-placeholder {
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  margin: 0;
+}
+
+/* Данные о картинке */
+.ps-meta-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ps-meta-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.ps-meta-row span {
+  color: #999;
+}
+
+/* Кнопки экспорта */
+.ps-export-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ps-export-actions button {
+  background-color: #505050;
+  border: 1px solid #333;
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: 0.1s;
+}
+
+.ps-export-actions button:hover:not(:disabled) {
+  background-color: #606060;
+}
+
+.ps-export-actions button:disabled {
+  background-color: #404040;
+  color: #666;
+  cursor: not-allowed;
+  border-color: #222;
+}
+
+/* --- СТРОКА СОСТОЯНИЯ --- */
+.ps-statusbar {
+  background-color: #383838;
+  height: 24px;
+  border-top: 1px solid #222222;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px;
+  font-size: 11px;
+  color: #aaa;
 }
