@@ -163,7 +163,14 @@ function App() {
       {/* НИЖНЯЯ СТРОКА СОСТОЯНИЯ */}
       <footer className="ps-statusbar">
         <div className="ps-status-left">
-          {meta ? `Документ: ${meta.width}x${meta.height} пикселей` : 'Готово'}
+          {meta ? (
+            <>
+              Размер: <strong>{meta.width} × {meta.height} px</strong> | 
+              Глубина цвета: <strong>{meta.depth}</strong>
+            </>
+          ) : (
+            'Готово'
+          )}
         </div>
         <div className="ps-status-right">
           Масштаб: По размеру экрана
