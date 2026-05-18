@@ -1,6 +1,10 @@
-// src/App.tsx
 import React, { useRef, useState } from 'react';
 import { decodeGB7, encodeGB7 } from './utils/gb7';
+import { 
+  Menu, MousePointer2, Hand, ZoomIn, Crop, 
+  Type, PaintBucket, Eraser, Download, Upload, 
+  Image as ImageIcon, Layers 
+} from 'lucide-react';
 import './App.css';
 
 interface ImageMeta {
@@ -11,6 +15,7 @@ interface ImageMeta {
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [meta, setMeta] = useState<ImageMeta | null>(null);
 
   // --- Загрузка файла ---
@@ -22,7 +27,6 @@ function App() {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    // Если это наш кастомный формат GB7
     if (file.name.toLowerCase().endsWith('.gb7')) {
       const buffer = await file.arrayBuffer();
       try {
@@ -30,20 +34,17 @@ function App() {
         canvas.width = imageData.width;
         canvas.height = imageData.height;
         ctx.putImageData(imageData, 0, 0);
-        
-        setMeta({ width: imageData.width, height: imageData.height, depth: "8 бит (7 бит цвет + 1 бит маска)" });
+        setMeta({ width: imageData.width, height: imageData.height, depth: "8 бит (7+1 маска)" });
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Ошибка чтения GB7');
       }
-    } 
-    // Если это стандартный формат (PNG, JPG)
-    else {
+    } else {
       const img = new Image();
       img.onload = () => {
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
-        setMeta({ width: img.width, height: img.height, depth: "32 бит (RGBA браузера)" });
+        setMeta({ width: img.width, height: img.height, depth: "32 бит (RGBA)" });
       };
       img.src = URL.createObjectURL(file);
     }
@@ -55,7 +56,7 @@ function App() {
     if (!canvas || !meta) return;
 
     let downloadUrl = '';
-    let filename = `image.${format.split('-')[0]}`;
+    let filename = `untitled.${format.split('-')[0]}`;
 
     if (format === 'png' || format === 'jpeg') {
       downloadUrl = canvas.toDataURL(`image/${format}`);
@@ -66,10 +67,9 @@ function App() {
       const useMask = format === 'gb7-mask';
       const blob = encodeGB7(imageData, useMask);
       downloadUrl = URL.createObjectURL(blob);
-      filename = useMask ? 'image-mask.gb7' : 'image-nomask.gb7';
+      filename = useMask ? 'untitled-mask.gb7' : 'untitled-nomask.gb7';
     }
 
-    // Создаем невидимую ссылку для триггера скачивания
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = filename;
@@ -79,35 +79,94 @@ function App() {
     URL.revokeObjectURL(downloadUrl);
   };
 
+  // Триггер скрытого инпута
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
-    <div className="app-container">
-      <header>
-        <h1>Обработка изображений: Лаб 1</h1>
-        <div className="toolbar">
-          <input type="file" accept=".png, .jpg, .jpeg, .gb7" onChange={handleFileUpload} />
-          
-          <button disabled={!meta} onClick={() => handleDownload('png')}>Скачать PNG</button>
-          <button disabled={!meta} onClick={() => handleDownload('jpeg')}>Скачать JPG</button>
-          <button disabled={!meta} onClick={() => handleDownload('gb7-nomask')}>Скачать GB7 (без маски)</button>
-          <button disabled={!meta} onClick={() => handleDownload('gb7-mask')}>Скачать GB7 (с маской)</button>
+    <div className="ps-app">
+      {/* ВЕРХНЕЕ МЕНЮ */}
+      <header className="ps-menubar">
+        <div className="ps-menu-logo">
+          <Menu size={16} />
         </div>
+        <div className="ps-menu-item" onClick={triggerFileInput}>Файл</div>
+        <div className="ps-menu-item">Редактирование</div>
+        <div className="ps-menu-item">Изображение</div>
+        <div className="ps-menu-item">Слои</div>
+        <div className="ps-menu-item">Фильтры</div>
+        <div className="ps-menu-item">Справка</div>
       </header>
 
-      <main className="canvas-wrapper">
-        <canvas ref={canvasRef} className="image-canvas"></canvas>
-      </main>
+      <div className="ps-body">
+        {/* ЛЕВАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ (Пока визуал для будущих лаб) */}
+        <aside className="ps-toolbar">
+          <button className="ps-tool active"><MousePointer2 size={18} /></button>
+          <button className="ps-tool"><Hand size={18} /></button>
+          <button className="ps-tool"><ZoomIn size={18} /></button>
+          <button className="ps-tool"><Crop size={18} /></button>
+          <button className="ps-tool"><PaintBucket size={18} /></button>
+          <button className="ps-tool"><Eraser size={18} /></button>
+          <button className="ps-tool"><Type size={18} /></button>
+        </aside>
 
-      <footer>
-        <div className="status-bar">
-          {meta ? (
-            <>
-              <span>Ширина: <strong>{meta.width} px</strong></span> | 
-              <span>Высота: <strong>{meta.height} px</strong></span> | 
-              <span>Глубина цвета: <strong>{meta.depth}</strong></span>
-            </>
-          ) : (
-            <span>Загрузите изображение для просмотра информации</span>
-          )}
+        {/* РАБОЧАЯ ОБЛАСТЬ (ХОЛСТ) */}
+        <main className="ps-workspace">
+          <div className="ps-canvas-wrapper">
+            <canvas ref={canvasRef} className="ps-canvas"></canvas>
+          </div>
+        </main>
+
+        {/* ПРАВАЯ ПАНЕЛЬ СВОЙСТВ */}
+        <aside className="ps-properties">
+          <div className="ps-panel">
+            <div className="ps-panel-header">
+              <ImageIcon size={14} /> Свойства
+            </div>
+            <div className="ps-panel-content">
+              {meta ? (
+                <div className="ps-meta-info">
+                  <div className="ps-meta-row"><span>Ширина:</span> {meta.width} px</div>
+                  <div className="ps-meta-row"><span>Высота:</span> {meta.height} px</div>
+                  <div className="ps-meta-row"><span>Глубина:</span> {meta.depth}</div>
+                </div>
+              ) : (
+                <p className="ps-placeholder">Изображение не загружено</p>
+              )}
+            </div>
+          </div>
+
+          <div className="ps-panel">
+            <div className="ps-panel-header">
+              <Layers size={14} /> Экспорт
+            </div>
+            <div className="ps-panel-content ps-export-actions">
+              <button disabled={!meta} onClick={() => handleDownload('png')}><Download size={14} /> PNG</button>
+              <button disabled={!meta} onClick={() => handleDownload('jpeg')}><Download size={14} /> JPG</button>
+              <button disabled={!meta} onClick={() => handleDownload('gb7-nomask')}><Download size={14} /> GB7 (без маски)</button>
+              <button disabled={!meta} onClick={() => handleDownload('gb7-mask')}><Download size={14} /> GB7 (с маской)</button>
+            </div>
+          </div>
+
+          {/* Скрытый инпут для файлов */}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            accept=".png, .jpg, .jpeg, .gb7" 
+            onChange={handleFileUpload} 
+            style={{ display: 'none' }} 
+          />
+        </aside>
+      </div>
+
+      {/* НИЖНЯЯ СТРОКА СОСТОЯНИЯ */}
+      <footer className="ps-statusbar">
+        <div className="ps-status-left">
+          {meta ? `Документ: ${meta.width}x${meta.height} пикселей` : 'Готово'}
+        </div>
+        <div className="ps-status-right">
+          Масштаб: По размеру экрана
         </div>
       </footer>
     </div>
