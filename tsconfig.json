@@ -7,11 +7,12 @@
     "skipLibCheck": true,
 
     /* Режим работы с модулями */
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": ["vite/client"],
 
     /* Строгие проверки (можно ослабить при необходимости) */
     "strict": true,
