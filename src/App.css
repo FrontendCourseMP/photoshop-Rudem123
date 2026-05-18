@@ -1,237 +1,391 @@
 /* src/App.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap');
 
 * {
   box-sizing: border-box;
 }
 
+/* ВЕСЬ ЭКРАН - запрещаем скролл для всего приложения */
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background-color: #282828; /* Классический цвет фона Workspace Photoshop */
-  color: #d1d1d1;
-  overflow: hidden; /* Чтобы приложение не скроллилось как сайт */
+  font-family: "Segoe UI", sans-serif;
+  background-color: #282828;
+  color: #c8c8c8;
+  overflow: hidden; /* ЭТО КРИТИЧНО: убираем скролл для всей страницы */
+  height: 100vh;
 }
 
 .ps-app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100vh; /* Приложение всегда строго по высоте окна */
   width: 100vw;
+  overflow: hidden;
 }
 
-/* --- ВЕРХНЕЕ МЕНЮ --- */
+/* 1. ГЛАВНОЕ МЕНЮ */
 .ps-menubar {
   display: flex;
   align-items: center;
-  background-color: #383838;
-  height: 32px;
-  border-bottom: 1px solid #222222;
+  background-color: #535353;
+  height: 28px;
   padding: 0 10px;
-  font-size: 13px;
-  user-select: none;
+  font-size: 12px;
+  color: #e0e0e0;
 }
 
-.ps-menu-logo {
+.ps-ps-logo {
+  color: #31a8ff;
+  font-weight: bold;
+  font-size: 14px;
   margin-right: 15px;
-  display: flex;
-  align-items: center;
-  color: #fff;
 }
 
 .ps-menu-item {
-  padding: 4px 12px;
-  border-radius: 4px;
+  padding: 2px 8px;
   cursor: pointer;
 }
 
 .ps-menu-item:hover {
-  background-color: #4a4a4a;
+  background-color: #6a6a6a;
   color: #fff;
 }
 
-/* --- ОСНОВНАЯ ЧАСТЬ (Flex-строка) --- */
+/* 2. ПАНЕЛЬ ПАРАМЕТРОВ (Options Bar) */
+.ps-options-bar {
+  display: flex;
+  align-items: center;
+  background-color: #535353;
+  height: 32px;
+  border-top: 1px solid #444;
+  border-bottom: 1px solid #333;
+  padding: 0 10px;
+  font-size: 12px;
+  gap: 10px;
+}
+
+.ps-opt-icon {
+  padding: 4px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.ps-opt-icon.active {
+  background-color: #383838;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.ps-opt-divider {
+  width: 1px;
+  height: 20px;
+  background-color: #444;
+  border-right: 1px solid #666;
+}
+
+.ps-opt-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ps-opt-item input[type="text"],
+.ps-opt-item select {
+  background-color: #383838;
+  border: 1px solid #222;
+  color: #ccc;
+  padding: 2px 4px;
+  font-size: 11px;
+  border-radius: 2px;
+}
+
+.ps-btn-mask {
+  background-color: #535353;
+  border: 1px solid #333;
+  color: #ccc;
+  padding: 2px 8px;
+  font-size: 11px;
+  margin-left: auto;
+  border-radius: 2px;
+}
+
+/* 3. ТЕЛО ПРОГРАММЫ */
 .ps-body {
   display: flex;
   flex: 1;
   overflow: hidden;
 }
 
-/* --- ЛЕВЫЙ ТУЛБАР --- */
+/* 4. ПАНЕЛЬ ИНСТРУМЕНТОВ (Левая) */
 .ps-toolbar {
-  width: 44px;
+  width: 36px;
   flex-shrink: 0; /* Запрещаем сжатие панели инструментов */
-  background-color: #383838;
-  border-right: 1px solid #222222;
+  background-color: #535353;
+  border-right: 1px solid #333;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 10px;
-  gap: 4px;
+  padding-top: 5px;
+  gap: 2px;
 }
 
 .ps-tool {
-  background: transparent;
-  border: none;
-  color: #a0a0a0;
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
+  width: 26px;
+  height: 26px;
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  color: #d0d0d0;
+  border-radius: 2px;
   cursor: pointer;
-  transition: 0.1s;
 }
 
 .ps-tool:hover {
-  background-color: #4a4a4a;
-  color: #fff;
+  background-color: #6a6a6a;
 }
 
 .ps-tool.active {
-  background-color: #262626;
-  color: #fff;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  background-color: #383838;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-/* --- РАБОЧАЯ ОБЛАСТЬ (WORKSPACE) --- */
+.ps-colors {
+  margin-top: 15px;
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.ps-color-fg,
+.ps-color-bg {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #fff;
+  position: absolute;
+}
+
+.ps-color-bg {
+  background-color: #fff;
+  right: 0;
+  bottom: 0;
+}
+
+.ps-color-fg {
+  background-color: #000;
+  left: 0;
+  top: 0;
+  z-index: 2;
+}
+
+/* 5. РАБОЧАЯ ОБЛАСТЬ (Workspace) */
+/* РАБОЧАЯ ОБЛАСТЬ - делаем её гибкой */
 .ps-workspace {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   background-color: #282828;
-  position: relative;
+  overflow: hidden; /* ЭТО КРИТИЧНО */
+}
+
+.ps-doc-tabs {
+  background-color: #2a2a2a;
+  height: 28px;
+  display: flex;
+  padding-left: 2px;
+  border-bottom: 1px solid #111;
+}
+
+.ps-doc-tab {
+  background-color: #383838;
+  color: #ccc;
+  font-size: 12px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+  margin-top: 2px;
+}
+
+.ps-tab-close {
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ps-canvas-area {
+  flex: 1; /* Занимает всё доступное свободное место */
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: auto;
-  padding: 40px;
+  overflow: auto; /* Скролл только внутри этой зоны, если картинка огромная */
+  padding: 30px;
 }
 
-/* Простая прозрачная обертка для центрирования холста */
 .ps-canvas-wrapper {
-  position: relative;
+  background-color: #fff;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  background-image:
+    linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
   max-width: 100%;
   max-height: 100%;
   display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 .ps-canvas {
-  display: block;
   max-width: 100%;
   max-height: 100%;
-  width: auto;
-  height: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  /* Тот самый шахматный фон теперь прямо на холсте! */
-  background-image: 
-    linear-gradient(45deg, #a0a0a0 25%, transparent 25%), 
-    linear-gradient(-45deg, #a0a0a0 25%, transparent 25%), 
-    linear-gradient(45deg, transparent 75%, #a0a0a0 75%), 
-    linear-gradient(-45deg, transparent 75%, #a0a0a0 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-  background-color: #fff;
+  object-fit: contain;
 }
 
-/* --- ПРАВАЯ ПАНЕЛЬ СВОЙСТВ --- */
-.ps-properties {
+/* 6. ПРАВЫЕ ПАНЕЛИ */
+.ps-right-panels {
   width: 260px;
-  flex-shrink: 0; /* Запрещаем сжатие боковой панели свойств */
-  background-color: #383838;
-  border-left: 1px solid #222222;
+  flex-shrink: 0; /* Запрещаем сжатие боковой панели свойств и экспорта */
+  background-color: #535353;
+  border-left: 1px solid #333;
   display: flex;
   flex-direction: column;
 }
 
 .ps-panel {
-  border-bottom: 1px solid #222222;
-}
-
-.ps-panel-header {
-  padding: 8px 12px;
-  background-color: #424242;
-  font-size: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #fff;
-  border-bottom: 1px solid #303030;
-}
-
-.ps-panel-content {
-  padding: 15px;
-}
-
-.ps-placeholder {
-  font-size: 13px;
-  color: #888;
-  text-align: center;
-  margin: 0;
-}
-
-/* Данные о картинке */
-.ps-meta-info {
+  border-bottom: 1px solid #333;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
 }
 
-.ps-meta-row {
+.ps-panel-color {
+  height: 220px;
+}
+
+.ps-panel-properties {
+  flex: 1;
+}
+
+.ps-panel-tabs {
   display: flex;
-  justify-content: space-between;
+  background-color: #444;
+  height: 26px;
+  border-bottom: 1px solid #333;
 }
 
-.ps-meta-row span {
-  color: #999;
+.ps-ptab {
+  padding: 0 10px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  color: #aaa;
+  cursor: default;
+}
+
+.ps-ptab.active {
+  background-color: #535353;
+  color: #fff;
+}
+
+.ps-panel-body {
+  padding: 10px;
+  font-size: 12px;
+  overflow-y: auto;
+}
+
+/* Имитация выбора цвета */
+.ps-color-picker-mock {
+  height: 140px;
+  background: linear-gradient(to right, #fff, #ff0000), linear-gradient(to bottom, transparent, #000);
+  background-blend-mode: multiply;
+  border: 1px solid #222;
+}
+
+/* Свойства */
+.ps-prop-section {
+  border-bottom: 1px solid #444;
+  padding: 8px 0;
+  color: #ccc;
+}
+
+.ps-canvas-props {
+  display: flex;
+  gap: 15px;
+  margin-left: 15px;
+}
+
+.ps-prop-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ps-prop-row input {
+  background-color: #383838;
+  border: 1px solid #222;
+  color: #ccc;
+  width: 65px;
+  padding: 4px;
+  font-size: 11px;
 }
 
 /* Кнопки экспорта */
 .ps-export-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ps-export-actions button {
-  background-color: #505050;
+  background-color: #4a4a4a;
   border: 1px solid #333;
   color: #fff;
-  padding: 8px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 6px;
+  font-size: 11px;
+  border-radius: 2px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: 0.1s;
 }
 
 .ps-export-actions button:hover:not(:disabled) {
-  background-color: #606060;
+  background-color: #5a5a5a;
 }
 
 .ps-export-actions button:disabled {
-  background-color: #404040;
-  color: #666;
+  background-color: #3d3d3d;
+  color: #777;
   cursor: not-allowed;
-  border-color: #222;
 }
 
-/* --- СТРОКА СОСТОЯНИЯ --- */
+/* 7. СТРОКА СОСТОЯНИЯ (Status Bar) */
 .ps-statusbar {
   background-color: #383838;
-  height: 24px;
-  border-top: 1px solid #222222;
+  height: 22px;
+  border-top: 1px solid #222;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 15px;
+  padding: 0 10px;
   font-size: 11px;
   color: #aaa;
+}
+
+.ps-status-zoom {
+  width: 45px;
+  color: #ccc;
+}
+
+.ps-status-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ps-status-arrow {
+  font-size: 12px;
+  margin-left: 5px;
 }
