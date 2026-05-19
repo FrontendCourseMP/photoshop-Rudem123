@@ -5,26 +5,26 @@
   box-sizing: border-box;
 }
 
-/* ВЕСЬ ЭКРАН - запрещаем скролл для всего приложения */
+/* Сброс стилей и отключение дефолтного скролла */
 body {
   margin: 0;
   padding: 0;
   font-family: "Segoe UI", sans-serif;
   background-color: #282828;
   color: #c8c8c8;
-  overflow: hidden; /* ЭТО КРИТИЧНО: убираем скролл для всей страницы */
+  overflow: hidden;
   height: 100vh;
 }
 
 .ps-app {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Приложение всегда строго по высоте окна */
+  height: 100vh;
   width: 100vw;
   overflow: hidden;
 }
 
-/* 1. ГЛАВНОЕ МЕНЮ */
+/* Панель меню */
 .ps-menubar {
   display: flex;
   align-items: center;
@@ -52,7 +52,7 @@ body {
   color: #fff;
 }
 
-/* 2. ПАНЕЛЬ ПАРАМЕТРОВ (Options Bar) */
+/* Верхний бар с настройками инструментов */
 .ps-options-bar {
   display: flex;
   align-items: center;
@@ -110,17 +110,17 @@ body {
   border-radius: 2px;
 }
 
-/* 3. ТЕЛО ПРОГРАММЫ */
+/* Основная сетка */
 .ps-body {
   display: flex;
   flex: 1;
   overflow: hidden;
 }
 
-/* 4. ПАНЕЛЬ ИНСТРУМЕНТОВ (Левая) */
+/* Панель инструментов слева */
 .ps-toolbar {
   width: 36px;
-  flex-shrink: 0; /* Запрещаем сжатие панели инструментов */
+  flex-shrink: 0;
   background-color: #535353;
   border-right: 1px solid #333;
   display: flex;
@@ -178,14 +178,14 @@ body {
   z-index: 2;
 }
 
-/* 5. РАБОЧАЯ ОБЛАСТЬ (Workspace) */
-/* РАБОЧАЯ ОБЛАСТЬ - делаем её гибкой */
+/* Рабочая область с холстом */
 .ps-workspace {
   flex: 1;
+  min-width: 0; /* Чтобы флекс сжимался и не вылазил */
   display: flex;
   flex-direction: column;
   background-color: #282828;
-  overflow: hidden; /* ЭТО КРИТИЧНО */
+  overflow: hidden;
 }
 
 .ps-doc-tabs {
@@ -215,24 +215,20 @@ body {
 }
 
 .ps-canvas-area {
-  flex: 1; /* Занимает всё доступное свободное место */
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: auto; /* Скролл только внутри этой зоны, если картинка огромная */
-  padding: 30px;
-}
-
-.ps-canvas-wrapper {
-  display: inline-flex; /* Обёртка ровно по размеру canvas, не растягивается */
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-  max-width: calc(100% - 60px);
-  max-height: calc(100% - 60px);
+  overflow: auto; /* Внутренний скролл для больших картинок */
+  padding: 20px;
+  position: relative;
+  min-height: 0;
 }
 
 .ps-canvas {
   display: block;
-  /* Шахматный фон теперь прямо на canvas — работает корректно */
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  /* Градиент для имитации шахматной прозрачности */
   background-image:
     linear-gradient(45deg, #ccc 25%, transparent 25%),
     linear-gradient(-45deg, #ccc 25%, transparent 25%),
@@ -241,28 +237,29 @@ body {
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
   background-color: #fff;
-  /* Масштабирование: не выходить за пределы рабочей области */
-  max-width: calc(100vw - 36px - 260px - 60px);
-  max-height: calc(100vh - 28px - 32px - 28px - 22px - 60px);
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
-  image-rendering: pixelated; /* Пиксели без сглаживания при масштабировании */
+  image-rendering: pixelated; /* Отключаем размытие пикселей при масштабе */
 }
 
-/* 6. ПРАВЫЕ ПАНЕЛИ */
+/* Боковые панели справа */
 .ps-right-panels {
   width: 260px;
-  flex-shrink: 0; /* Запрещаем сжатие боковой панели свойств и экспорта */
+  flex-shrink: 0;
   background-color: #535353;
   border-left: 1px solid #333;
   display: flex;
   flex-direction: column;
+  overflow-y: auto; /* Добавляем скроллбар для интерфейса панелей, когда окно маленькое */
 }
 
 .ps-panel {
   border-bottom: 1px solid #333;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0; /* Панели не сжимаются по высоте, а аккуратно уходят под скроллбар */
 }
 
 .ps-panel-color {
@@ -367,7 +364,7 @@ body {
   cursor: not-allowed;
 }
 
-/* 7. СТРОКА СОСТОЯНИЯ (Status Bar) */
+/* Строка состояния (подвал) */
 .ps-statusbar {
   background-color: #383838;
   height: 22px;

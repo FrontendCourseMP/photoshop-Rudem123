@@ -3,7 +3,7 @@ import { decodeGB7, encodeGB7 } from './utils/gb7';
 import {
   MousePointer2, Move, Lasso, Crop, Pipette,
   PaintBucket, Eraser, Type, ZoomIn, Hand,
-  Image as ImageIcon, Layers, Download, Search,
+  Image as ImageIcon, Download,
   SquareDashed, Paintbrush, PenTool, Home
 } from 'lucide-react';
 import './App.css';
@@ -20,7 +20,7 @@ function App() {
   const [meta, setMeta] = useState<ImageMeta | null>(null);
   const [filename, setFilename] = useState<string>('Без имени-1');
 
-  // --- Загрузка файла ---
+  // Загрузка файла (картинка или GB7)
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -43,17 +43,23 @@ function App() {
       }
     } else {
       const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
         setMeta({ width: img.width, height: img.height, depth: "32 бит (RGBA)" });
+        URL.revokeObjectURL(objectUrl); // Освобождаем память после отрисовки
       };
-      img.src = URL.createObjectURL(file);
+      img.onerror = () => {
+        alert('Не удалось загрузить изображение');
+        URL.revokeObjectURL(objectUrl);
+      };
+      img.src = objectUrl;
     }
   };
 
-  // --- Скачивание файла ---
+  // Скачивание и сохранение файла
   const handleDownload = (format: 'png' | 'jpeg' | 'gb7-mask' | 'gb7-nomask') => {
     const canvas = canvasRef.current;
     if (!canvas || !meta) return;
@@ -62,7 +68,15 @@ function App() {
     let outFilename = filename.split('.')[0] + `_export.${format.split('-')[0]}`;
 
     if (format === 'png' || format === 'jpeg') {
+      // Используем dataURL напрямую — revokeObjectURL здесь не нужен
       downloadUrl = canvas.toDataURL(`image/${format}`);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = outFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
     } else {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -79,7 +93,8 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(downloadUrl);
+    // Небольшая задержка перед revoke — браузер должен успеть начать скачивание
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
   };
 
   const triggerFileInput = () => {
@@ -88,7 +103,7 @@ function App() {
 
   return (
     <div className="ps-app">
-      {/* 1. ГЛАВНОЕ МЕНЮ */}
+      {/* Главное меню сверху */}
       <header className="ps-menubar">
         <div className="ps-ps-logo">Ps</div>
         <div className="ps-menu-item" onClick={triggerFileInput}>Файл</div>
@@ -104,7 +119,7 @@ function App() {
         <div className="ps-menu-item">Справка</div>
       </header>
 
-      {/* 2. ПАНЕЛЬ ПАРАМЕТРОВ ИНСТРУМЕНТА (Options Bar) */}
+      {/* Панель параметров выбранного инструмента */}
       <div className="ps-options-bar">
         <div className="ps-opt-icon"><Home size={14} /></div>
         <div className="ps-opt-divider"></div>
@@ -117,7 +132,7 @@ function App() {
       </div>
 
       <div className="ps-body">
-        {/* 3. ЛЕВАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ */}
+        {/* Боковая панель инструментов (как в Photoshop) */}
         <aside className="ps-toolbar">
           <div className="ps-tool"><Move size={16} /></div>
           <div className="ps-tool active"><SquareDashed size={16} /></div>
@@ -138,9 +153,9 @@ function App() {
           </div>
         </aside>
 
-        {/* 4. РАБОЧАЯ ОБЛАСТЬ (WORKSPACE) */}
+        {/* Рабочая зона с холстом */}
         <main className="ps-workspace">
-          {/* Вкладка документа */}
+          {/* Вкладки сверху */}
           <div className="ps-doc-tabs">
             <div className="ps-doc-tab active">
               {filename} @ 100% ({meta ? meta.depth : 'RGB/8#'}) <span className="ps-tab-close">×</span>
@@ -148,15 +163,25 @@ function App() {
           </div>
 
           <div className="ps-canvas-area">
-            <div className="ps-canvas-wrapper">
+            {meta ? (
               <canvas ref={canvasRef} className="ps-canvas"></canvas>
-            </div>
+            ) : (
+              <>
+                {/* Скрытый канвас для ref пока файл не открыт */}
+                <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+                <div className="ps-empty-state">
+                  <div className="ps-empty-icon">📂</div>
+                  <p>Откройте файл через меню «Файл»</p>
+                  <span>PNG, JPG или .gb7</span>
+                </div>
+              </>
+            )}
           </div>
         </main>
 
-        {/* 5. ПРАВАЯ ПАНЕЛЬ СВОЙСТВ */}
+        {/* Боковые панели справа */}
         <aside className="ps-right-panels">
-          {/* Панель Цвета */}
+          {/* Выбор цвета */}
           <div className="ps-panel ps-panel-color">
             <div className="ps-panel-tabs">
               <div className="ps-ptab active">Цвет</div>
@@ -168,7 +193,7 @@ function App() {
             </div>
           </div>
 
-          {/* Панель Свойств */}
+          {/* Панель со свойствами холста */}
           <div className="ps-panel ps-panel-properties">
             <div className="ps-panel-tabs">
               <div className="ps-ptab active">Свойства</div>
@@ -190,7 +215,7 @@ function App() {
             </div>
           </div>
 
-          {/* Панель Экспорта (вместо слоев для удобства лабы) */}
+          {/* Функции экспорта */}
           <div className="ps-panel ps-panel-layers">
             <div className="ps-panel-tabs">
               <div className="ps-ptab active">Экспорт</div>
@@ -206,11 +231,11 @@ function App() {
           </div>
         </aside>
 
-        {/* Скрытый инпут */}
+        {/* Инпут для выбора файла, который кликаем программно */}
         <input type="file" ref={fileInputRef} accept=".png, .jpg, .jpeg, .gb7" onChange={handleFileUpload} style={{ display: 'none' }} />
       </div>
 
-      {/* 6. СТРОКА СОСТОЯНИЯ (Обязательное требование) */}
+      {/* Статус-бар с метаданными */}
       <footer className="ps-statusbar">
         <div className="ps-status-zoom">100%</div>
         <div className="ps-status-info">
