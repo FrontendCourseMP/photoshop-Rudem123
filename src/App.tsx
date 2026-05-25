@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { decodeGB7, encodeGB7 } from './utils/gb7';
 import {
   MousePointer2, Move, Lasso, Crop, Pipette,
@@ -6,6 +6,7 @@ import {
   Image as ImageIcon, Download,
   SquareDashed, Paintbrush, PenTool, Home
 } from 'lucide-react';
+import LevelsDialog from './components/LevelsDialog';
 import './App.css';
 
 interface ImageMeta {
@@ -48,6 +49,7 @@ function App() {
   const [pickedColor, setPickedColor] = useState<{x: number, y: number, r: number, g: number, b: number, lab: {l: number, a: number, b: number}} | null>(null);
   const [zoom, setZoom] = useState<number>(100);
   const [zoomMode, setZoomMode] = useState<'in'|'out'>('in');
+  const [levelsOpen, setLevelsOpen] = useState(false);
 
   const rCanvasRef = useRef<HTMLCanvasElement>(null);
   const gCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -204,7 +206,7 @@ function App() {
     drawThumb(gCanvasRef, 'g');
     drawThumb(bCanvasRef, 'b');
     drawThumb(aCanvasRef, 'a');
-  }, [originalImgData]);
+  }, [originalImgData, activeRightTab]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (activeTool === 'pipette') {
@@ -242,7 +244,7 @@ function App() {
         <div className="ps-ps-logo">Ps</div>
         <div className="ps-menu-item" onClick={triggerFileInput}>Файл</div>
         <div className="ps-menu-item">Редактирование</div>
-        <div className="ps-menu-item">Изображение</div>
+        <div className="ps-menu-item" onClick={() => meta && setLevelsOpen(true)}>Изображение ▸ Уровни</div>
         <div className="ps-menu-item">Слои</div>
         <div className="ps-menu-item">Текст</div>
         <div className="ps-menu-item">Выделение</div>
@@ -473,6 +475,28 @@ function App() {
           <span className="ps-status-arrow">&gt;</span>
         </div>
       </footer>
+      {/* Диалог «Уровни» */}
+      <LevelsDialog
+        open={levelsOpen}
+        originalImgData={originalImgData}
+        onPreview={useCallback((data: ImageData | null) => {
+          if (!canvasRef.current || !originalImgData) return;
+          const ctx = canvasRef.current.getContext('2d');
+          if (!ctx) return;
+          ctx.putImageData(data ?? originalImgData, 0, 0);
+        }, [originalImgData])}
+        onApply={useCallback((data: ImageData) => {
+          setOriginalImgData(data);
+          setLevelsOpen(false);
+        }, [])}
+        onCancel={useCallback(() => {
+          if (canvasRef.current && originalImgData) {
+            const ctx = canvasRef.current.getContext('2d');
+            ctx?.putImageData(originalImgData, 0, 0);
+          }
+          setLevelsOpen(false);
+        }, [originalImgData])}
+      />
     </div>
   );
 }
