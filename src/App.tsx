@@ -1,8 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { decodeGB7, encodeGB7 } from './utils/gb7';
 import {
   MousePointer2, Move, Lasso, Crop, Pipette,
-  PaintBucket, Eraser, Type, ZoomIn, Hand,
+  PaintBucket, Eraser, Type, ZoomIn, ZoomOut, Hand,
   Image as ImageIcon, Download,
   SquareDashed, Paintbrush, PenTool, Home
 } from 'lucide-react';
@@ -14,11 +14,45 @@ interface ImageMeta {
   depth: string;
 }
 
+function rgbToLab(r: number, g: number, b: number) {
+  let r_ = r / 255, g_ = g / 255, b_ = b / 255;
+  r_ = r_ > 0.04045 ? Math.pow((r_ + 0.055) / 1.055, 2.4) : r_ / 12.92;
+  g_ = g_ > 0.04045 ? Math.pow((g_ + 0.055) / 1.055, 2.4) : g_ / 12.92;
+  b_ = b_ > 0.04045 ? Math.pow((b_ + 0.055) / 1.055, 2.4) : b_ / 12.92;
+
+  let x = (r_ * 0.4124 + g_ * 0.3576 + b_ * 0.1805) / 0.95047;
+  let y = (r_ * 0.2126 + g_ * 0.7152 + b_ * 0.0722) / 1.00000;
+  let z = (r_ * 0.0193 + g_ * 0.1192 + b_ * 0.9505) / 1.08883;
+
+  x = x > 0.008856 ? Math.pow(x, 1/3) : (7.787 * x) + 16/116;
+  y = y > 0.008856 ? Math.pow(y, 1/3) : (7.787 * y) + 16/116;
+  z = z > 0.008856 ? Math.pow(z, 1/3) : (7.787 * z) + 16/116;
+
+  return {
+    l: Math.max(0, (116 * y) - 16),
+    a: (x - y) * 500,
+    b: (y - z) * 200
+  };
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [meta, setMeta] = useState<ImageMeta | null>(null);
   const [filename, setFilename] = useState<string>('Без имени-1');
+
+  const [originalImgData, setOriginalImgData] = useState<ImageData | null>(null);
+  const [channels, setChannels] = useState({ r: true, g: true, b: true, a: true });
+  const [activeRightTab, setActiveRightTab] = useState<'export'|'channels'>('channels');
+  const [activeTool, setActiveTool] = useState<string>('pipette');
+  const [pickedColor, setPickedColor] = useState<{x: number, y: number, r: number, g: number, b: number, lab: {l: number, a: number, b: number}} | null>(null);
+  const [zoom, setZoom] = useState<number>(100);
+  const [zoomMode, setZoomMode] = useState<'in'|'out'>('in');
+
+  const rCanvasRef = useRef<HTMLCanvasElement>(null);
+  const gCanvasRef = useRef<HTMLCanvasElement>(null);
+  const bCanvasRef = useRef<HTMLCanvasElement>(null);
+  const aCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Загрузка файла (картинка или GB7)
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,7 +70,8 @@ function App() {
         const imageData = decodeGB7(buffer);
         canvas.width = imageData.width;
         canvas.height = imageData.height;
-        ctx.putImageData(imageData, 0, 0);
+        setOriginalImgData(imageData);
+        setChannels({ r: true, g: true, b: true, a: true });
         setMeta({ width: imageData.width, height: imageData.height, depth: "8 бит (GB7)" });
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Ошибка чтения GB7');
@@ -48,6 +83,9 @@ function App() {
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        setOriginalImgData(imageData);
+        setChannels({ r: true, g: true, b: true, a: true });
         setMeta({ width: img.width, height: img.height, depth: "32 бит (RGBA)" });
         URL.revokeObjectURL(objectUrl); // Освобождаем память после отрисовки
       };
@@ -101,6 +139,102 @@ function App() {
     fileInputRef.current?.click();
   };
 
+  useEffect(() => {
+    if (!originalImgData || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const newImgData = new ImageData(
+      new Uint8ClampedArray(originalImgData.data),
+      originalImgData.width,
+      originalImgData.height
+    );
+    
+    const onlyAlpha = !channels.r && !channels.g && !channels.b && channels.a;
+    
+    for (let i = 0; i < newImgData.data.length; i += 4) {
+      if (onlyAlpha) {
+        const a = originalImgData.data[i+3];
+        newImgData.data[i] = a;
+        newImgData.data[i+1] = a;
+        newImgData.data[i+2] = a;
+        newImgData.data[i+3] = 255;
+      } else {
+        if (!channels.r) newImgData.data[i] = 0;
+        if (!channels.g) newImgData.data[i+1] = 0;
+        if (!channels.b) newImgData.data[i+2] = 0;
+        if (!channels.a) newImgData.data[i+3] = 255; // if alpha off, opaque
+      }
+    }
+    
+    ctx.putImageData(newImgData, 0, 0);
+  }, [channels, originalImgData]);
+
+  useEffect(() => {
+    if (!originalImgData) return;
+    const drawThumb = (ref: React.RefObject<HTMLCanvasElement | null>, type: 'r' | 'g' | 'b' | 'a') => {
+      const canvas = ref.current;
+      if (!canvas) return;
+      canvas.width = originalImgData.width;
+      canvas.height = originalImgData.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const thumbData = new ImageData(
+        new Uint8ClampedArray(originalImgData.data),
+        originalImgData.width,
+        originalImgData.height
+      );
+      for (let i = 0; i < thumbData.data.length; i += 4) {
+          if (type === 'r') {
+             thumbData.data[i+1] = 0; thumbData.data[i+2] = 0; thumbData.data[i+3] = 255;
+          } else if (type === 'g') {
+             thumbData.data[i] = 0; thumbData.data[i+2] = 0; thumbData.data[i+3] = 255;
+          } else if (type === 'b') {
+             thumbData.data[i] = 0; thumbData.data[i+1] = 0; thumbData.data[i+3] = 255;
+          } else if (type === 'a') {
+             const a = thumbData.data[i+3];
+             thumbData.data[i] = a; thumbData.data[i+1] = a; thumbData.data[i+2] = a;
+             thumbData.data[i+3] = 255;
+          }
+      }
+      ctx.putImageData(thumbData, 0, 0);
+    }
+    drawThumb(rCanvasRef, 'r');
+    drawThumb(gCanvasRef, 'g');
+    drawThumb(bCanvasRef, 'b');
+    drawThumb(aCanvasRef, 'a');
+  }, [originalImgData]);
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (activeTool === 'pipette') {
+      if (!originalImgData || !canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const scaleX = canvasRef.current.width / rect.width;
+      const scaleY = canvasRef.current.height / rect.height;
+      
+      const x = Math.floor((e.clientX - rect.left) * scaleX);
+      const y = Math.floor((e.clientY - rect.top) * scaleY);
+      
+      if (x >= 0 && x < originalImgData.width && y >= 0 && y < originalImgData.height) {
+         const i = (y * originalImgData.width + x) * 4;
+         const r = originalImgData.data[i];
+         const g = originalImgData.data[i+1];
+         const b = originalImgData.data[i+2];
+         const lab = rgbToLab(r, g, b);
+         setPickedColor({ x, y, r, g, b, lab });
+      }
+    } else if (activeTool === 'zoom') {
+      setZoom(prev => {
+        if (zoomMode === 'in') {
+          return Math.min(1600, Math.round(prev * 1.4));
+        } else {
+          return Math.max(10, Math.round(prev / 1.4));
+        }
+      });
+    }
+  };
+
   return (
     <div className="ps-app">
       {/* Главное меню сверху */}
@@ -121,32 +255,92 @@ function App() {
 
       {/* Панель параметров выбранного инструмента */}
       <div className="ps-options-bar">
-        <div className="ps-opt-icon"><Home size={14} /></div>
-        <div className="ps-opt-divider"></div>
-        <div className="ps-opt-icon active"><SquareDashed size={14} /></div>
-        <div className="ps-opt-divider"></div>
-        <div className="ps-opt-item"><span>Растушевка:</span> <input type="text" value="0 пикс." readOnly /></div>
-        <div className="ps-opt-item"><input type="checkbox" disabled /> Сглаживание</div>
-        <div className="ps-opt-item"><span>Стиль:</span> <select disabled><option>Обычный</option></select></div>
-        <button className="ps-btn-mask">Выделение и маска...</button>
+        {activeTool === 'pipette' && pickedColor ? (
+          <>
+            <div className="ps-opt-icon"><Pipette size={14} /></div>
+            <div className="ps-opt-divider"></div>
+            <div className="ps-opt-item"><span>X:</span> <input type="text" style={{width: 40}} value={pickedColor.x} readOnly /></div>
+            <div className="ps-opt-item"><span>Y:</span> <input type="text" style={{width: 40}} value={pickedColor.y} readOnly /></div>
+            <div className="ps-opt-divider"></div>
+            <div style={{width: 16, height: 16, backgroundColor: `rgb(${pickedColor.r},${pickedColor.g},${pickedColor.b})`, border: '1px solid #777'}}></div>
+            <div className="ps-opt-item"><span>RGB:</span> <input type="text" style={{width: 90}} value={`${pickedColor.r}, ${pickedColor.g}, ${pickedColor.b}`} readOnly /></div>
+            <div className="ps-opt-item"><span>LAB:</span> <input type="text" style={{width: 130}} value={`${pickedColor.lab.l.toFixed(1)}, ${pickedColor.lab.a.toFixed(1)}, ${pickedColor.lab.b.toFixed(1)}`} readOnly /></div>
+          </>
+        ) : activeTool === 'zoom' ? (
+          <>
+            <div className="ps-opt-icon"><ZoomIn size={14} /></div>
+            <div className="ps-opt-divider"></div>
+            <div className="ps-opt-item">
+              <button 
+                className={`ps-zoom-btn ${zoomMode === 'in' ? 'active' : ''}`}
+                onClick={() => setZoomMode('in')}
+                title="Приближение"
+              >
+                <ZoomIn size={14} />
+              </button>
+              <button 
+                className={`ps-zoom-btn ${zoomMode === 'out' ? 'active' : ''}`}
+                onClick={() => setZoomMode('out')}
+                title="Отдаление"
+              >
+                <ZoomOut size={14} />
+              </button>
+            </div>
+            <div className="ps-opt-divider"></div>
+            <div className="ps-opt-item">
+              <span>Масштаб:</span>
+              <input 
+                type="range" 
+                min="10" 
+                max="1600" 
+                value={zoom} 
+                onChange={(e) => setZoom(Number(e.target.value))}
+                style={{ width: 120, height: 4, accentColor: '#31a8ff' }}
+              />
+              <span style={{ width: 45, textAlign: 'right', display: 'inline-block' }}>{zoom}%</span>
+            </div>
+            <div className="ps-opt-divider"></div>
+            <button className="ps-btn-opt" onClick={() => setZoom(100)}>100%</button>
+            <button className="ps-btn-opt" onClick={() => {
+              if (!meta || !canvasRef.current) return;
+              const parent = canvasRef.current.parentElement;
+              if (!parent) return;
+              const w = parent.clientWidth - 40;
+              const h = parent.clientHeight - 40;
+              const scale = Math.min(w / meta.width, h / meta.height, 1) * 100;
+              setZoom(Math.round(scale));
+            }}>Подогнать</button>
+          </>
+        ) : (
+          <>
+            <div className="ps-opt-icon"><Home size={14} /></div>
+            <div className="ps-opt-divider"></div>
+            <div className="ps-opt-icon active"><SquareDashed size={14} /></div>
+            <div className="ps-opt-divider"></div>
+            <div className="ps-opt-item"><span>Растушевка:</span> <input type="text" value="0 пикс." readOnly /></div>
+            <div className="ps-opt-item"><input type="checkbox" disabled /> Сглаживание</div>
+            <div className="ps-opt-item"><span>Стиль:</span> <select disabled><option>Обычный</option></select></div>
+            <button className="ps-btn-mask">Выделение и маска...</button>
+          </>
+        )}
       </div>
 
       <div className="ps-body">
         {/* Боковая панель инструментов (как в Photoshop) */}
         <aside className="ps-toolbar">
-          <div className="ps-tool"><Move size={16} /></div>
-          <div className="ps-tool active"><SquareDashed size={16} /></div>
-          <div className="ps-tool"><Lasso size={16} /></div>
-          <div className="ps-tool"><Crop size={16} /></div>
-          <div className="ps-tool"><Pipette size={16} /></div>
-          <div className="ps-tool"><Paintbrush size={16} /></div>
-          <div className="ps-tool"><PaintBucket size={16} /></div>
-          <div className="ps-tool"><Eraser size={16} /></div>
-          <div className="ps-tool"><PenTool size={16} /></div>
-          <div className="ps-tool"><Type size={16} /></div>
-          <div className="ps-tool"><MousePointer2 size={16} /></div>
-          <div className="ps-tool"><Hand size={16} /></div>
-          <div className="ps-tool"><ZoomIn size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'move' ? 'active' : ''}`} onClick={() => setActiveTool('move')}><Move size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'select' ? 'active' : ''}`} onClick={() => setActiveTool('select')}><SquareDashed size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'lasso' ? 'active' : ''}`} onClick={() => setActiveTool('lasso')}><Lasso size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'crop' ? 'active' : ''}`} onClick={() => setActiveTool('crop')}><Crop size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'pipette' ? 'active' : ''}`} onClick={() => setActiveTool('pipette')}><Pipette size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'brush' ? 'active' : ''}`} onClick={() => setActiveTool('brush')}><Paintbrush size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'bucket' ? 'active' : ''}`} onClick={() => setActiveTool('bucket')}><PaintBucket size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => setActiveTool('eraser')}><Eraser size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'pen' ? 'active' : ''}`} onClick={() => setActiveTool('pen')}><PenTool size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'type' ? 'active' : ''}`} onClick={() => setActiveTool('type')}><Type size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'pointer' ? 'active' : ''}`} onClick={() => setActiveTool('pointer')}><MousePointer2 size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'hand' ? 'active' : ''}`} onClick={() => setActiveTool('hand')}><Hand size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'zoom' ? 'active' : ''}`} onClick={() => setActiveTool('zoom')}><ZoomIn size={16} /></div>
           <div className="ps-colors">
             <div className="ps-color-fg"></div>
             <div className="ps-color-bg"></div>
@@ -158,21 +352,34 @@ function App() {
           {/* Вкладки сверху */}
           <div className="ps-doc-tabs">
             <div className="ps-doc-tab active">
-              {filename} @ 100% ({meta ? meta.depth : 'RGB/8#'}) <span className="ps-tab-close">×</span>
+              {filename} @ {zoom}% ({meta ? meta.depth : 'RGB/8#'}) <span className="ps-tab-close">×</span>
             </div>
           </div>
 
           <div className="ps-canvas-area">
             {meta ? (
-              <canvas ref={canvasRef} className="ps-canvas"></canvas>
+              <div className="ps-canvas-scroll">
+                <canvas 
+                  ref={canvasRef} 
+                  className="ps-canvas" 
+                  onClick={handleCanvasClick} 
+                  style={{ 
+                    cursor: activeTool === 'pipette' ? 'crosshair' : activeTool === 'zoom' ? (zoomMode === 'in' ? 'zoom-in' : 'zoom-out') : 'default',
+                    width: `${meta.width * (zoom / 100)}px`,
+                    height: `${meta.height * (zoom / 100)}px`
+                  }}
+                ></canvas>
+              </div>
             ) : (
               <>
                 {/* Скрытый канвас для ref пока файл не открыт */}
                 <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-                <div className="ps-empty-state">
-                  <div className="ps-empty-icon">📂</div>
-                  <p>Откройте файл через меню «Файл»</p>
-                  <span>PNG, JPG или .gb7</span>
+                <div className="ps-canvas-scroll">
+                  <div className="ps-empty-state">
+                    <div className="ps-empty-icon">📂</div>
+                    <p>Откройте файл через меню «Файл»</p>
+                    <span>PNG, JPG или .gb7</span>
+                  </div>
                 </div>
               </>
             )}
@@ -215,18 +422,41 @@ function App() {
             </div>
           </div>
 
-          {/* Функции экспорта */}
+          {/* Функции экспорта и каналы */}
           <div className="ps-panel ps-panel-layers">
             <div className="ps-panel-tabs">
-              <div className="ps-ptab active">Экспорт</div>
-              <div className="ps-ptab">Слои</div>
-              <div className="ps-ptab">Каналы</div>
+              <div className={`ps-ptab ${activeRightTab === 'export' ? 'active' : ''}`} onClick={() => setActiveRightTab('export')}>Экспорт</div>
+              <div className={`ps-ptab ${activeRightTab === 'channels' ? 'active' : ''}`} onClick={() => setActiveRightTab('channels')}>Каналы</div>
             </div>
-            <div className="ps-panel-body ps-export-actions">
-              <button disabled={!meta} onClick={() => handleDownload('png')}><Download size={14} /> Сохранить как PNG</button>
-              <button disabled={!meta} onClick={() => handleDownload('jpeg')}><Download size={14} /> Сохранить как JPG</button>
-              <button disabled={!meta} onClick={() => handleDownload('gb7-nomask')}><Download size={14} /> Сохранить как GB7 (Без маски)</button>
-              <button disabled={!meta} onClick={() => handleDownload('gb7-mask')}><Download size={14} /> Сохранить как GB7 (С маской)</button>
+            
+            <div className="ps-panel-body">
+              {activeRightTab === 'export' ? (
+                <div className="ps-export-actions">
+                  <button disabled={!meta} onClick={() => handleDownload('png')}><Download size={14} /> Сохранить как PNG</button>
+                  <button disabled={!meta} onClick={() => handleDownload('jpeg')}><Download size={14} /> Сохранить как JPG</button>
+                  <button disabled={!meta} onClick={() => handleDownload('gb7-nomask')}><Download size={14} /> Сохранить как GB7 (Без маски)</button>
+                  <button disabled={!meta} onClick={() => handleDownload('gb7-mask')}><Download size={14} /> Сохранить как GB7 (С маской)</button>
+                </div>
+              ) : (
+                <div className="ps-channels-list">
+                  <div className={`ps-channel-item ${!channels.r ? 'disabled' : ''}`} onClick={() => setChannels(c => ({...c, r: !c.r}))}>
+                    <canvas ref={rCanvasRef} className="ps-channel-thumb"></canvas>
+                    <span className="ps-channel-name">Красный (R)</span>
+                  </div>
+                  <div className={`ps-channel-item ${!channels.g ? 'disabled' : ''}`} onClick={() => setChannels(c => ({...c, g: !c.g}))}>
+                    <canvas ref={gCanvasRef} className="ps-channel-thumb"></canvas>
+                    <span className="ps-channel-name">Зеленый (G)</span>
+                  </div>
+                  <div className={`ps-channel-item ${!channels.b ? 'disabled' : ''}`} onClick={() => setChannels(c => ({...c, b: !c.b}))}>
+                    <canvas ref={bCanvasRef} className="ps-channel-thumb"></canvas>
+                    <span className="ps-channel-name">Синий (B)</span>
+                  </div>
+                  <div className={`ps-channel-item ${!channels.a ? 'disabled' : ''}`} onClick={() => setChannels(c => ({...c, a: !c.a}))}>
+                    <canvas ref={aCanvasRef} className="ps-channel-thumb"></canvas>
+                    <span className="ps-channel-name">Альфа (A)</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </aside>
@@ -237,7 +467,7 @@ function App() {
 
       {/* Статус-бар с метаданными */}
       <footer className="ps-statusbar">
-        <div className="ps-status-zoom">100%</div>
+        <div className="ps-status-zoom">{zoom}%</div>
         <div className="ps-status-info">
           {meta ? `${meta.width} пикс. x ${meta.height} пикс. (${meta.depth})` : 'Документ не загружен'}
           <span className="ps-status-arrow">&gt;</span>
