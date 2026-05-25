@@ -37,21 +37,32 @@ export function buildLUT(inBlack: number, inWhite: number, gamma: number): Uint8
 
 /** Применяем уровни ко всем каналам без мутации оригинала */
 export function applyLevels(original: ImageData, s: LevelsState): ImageData {
-  const result = new ImageData(
-    new Uint8ClampedArray(original.data),
-    original.width,
-    original.height
-  );
   const mLUT = buildLUT(s.master.inBlack, s.master.inWhite, s.master.inGamma);
   const rLUT = buildLUT(s.r.inBlack, s.r.inWhite, s.r.inGamma);
   const gLUT = buildLUT(s.g.inBlack, s.g.inWhite, s.g.inGamma);
   const bLUT = buildLUT(s.b.inBlack, s.b.inWhite, s.b.inGamma);
   const aLUT = buildLUT(s.a.inBlack, s.a.inWhite, s.a.inGamma);
-  for (let i = 0; i < result.data.length; i += 4) {
-    result.data[i]   = rLUT[mLUT[original.data[i]]];
-    result.data[i+1] = gLUT[mLUT[original.data[i+1]]];
-    result.data[i+2] = bLUT[mLUT[original.data[i+2]]];
-    result.data[i+3] = aLUT[original.data[i+3]];
+
+  // Предвычисляем объединенные LUT для каждого канала
+  const combinedR = new Uint8Array(256);
+  const combinedG = new Uint8Array(256);
+  const combinedB = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) {
+    combinedR[i] = rLUT[mLUT[i]];
+    combinedG[i] = gLUT[mLUT[i]];
+    combinedB[i] = bLUT[mLUT[i]];
+  }
+
+  const result = new ImageData(original.width, original.height);
+  const d = original.data;
+  const resD = result.data;
+  const len = d.length;
+
+  for (let i = 0; i < len; i += 4) {
+    resD[i]   = combinedR[d[i]];
+    resD[i+1] = combinedG[d[i+1]];
+    resD[i+2] = combinedB[d[i+2]];
+    resD[i+3] = aLUT[d[i+3]];
   }
   return result;
 }
