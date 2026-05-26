@@ -13,7 +13,7 @@ for (let i = 0; i < 128; i++) {
     const g = Math.round(i * 255 / 127);
     GRAY7_TO_8[i] = g;
     // LE memory layout: [R, G, B, A] = [g, g, g, 0xFF]
-    GRAY7_OPAQUE[i]      = g | (g << 8) | (g << 16) | (0xFF << 24);
+    GRAY7_OPAQUE[i] = g | (g << 8) | (g << 16) | (0xFF << 24);
     GRAY7_TRANSPARENT[i] = g | (g << 8) | (g << 16); // alpha = 0
 }
 
@@ -38,7 +38,7 @@ export function decodeGB7(buffer: ArrayBuffer): ImageData {
     const hasMask = (flag & 1) === 1;
 
     // Big-Endian чтение ширины и высоты (2 байта DataView нужны только здесь, для заголовка)
-    const width  = (bytes[6] << 8) | bytes[7];
+    const width = (bytes[6] << 8) | bytes[7];
     const height = (bytes[8] << 8) | bytes[9];
 
     if (width === 0 || height === 0) {

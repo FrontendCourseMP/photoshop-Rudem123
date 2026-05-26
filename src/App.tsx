@@ -42,10 +42,19 @@ function App() {
   const [meta, setMeta] = useState<ImageMeta | null>(null);
   const [filename, setFilename] = useState<string>('Без имени-1');
 
-  const [originalImgData, setOriginalImgData] = useState<ImageData | null>(null);
+  // ВАЖНО: Мы храним ImageData в useRef, а не в useState!
+  // Если положить гигантский массив пикселей в useState, расширение React DevTools 
+  // в браузере попытается его сериализовать для инспектора, что вызывает зависание на 8-10 секунд.
   const originalImgDataRef = useRef<ImageData | null>(null);
-  // Синхронизируем ref с state для доступа из стабильных callback'ов
-  useEffect(() => { originalImgDataRef.current = originalImgData; }, [originalImgData]);
+  const [imgVersion, setImgVersion] = useState(0);
+
+  // Функция для безопасного обновления картинки и принудительного ререндера
+  const setOriginalImgData = useCallback((data: ImageData | null) => {
+    originalImgDataRef.current = data;
+    setImgVersion(v => v + 1);
+  }, []);
+
+  const originalImgData = originalImgDataRef.current;
 
   const [channels, setChannels] = useState({ r: true, g: true, b: true, a: true });
   const [activeRightTab, setActiveRightTab] = useState<'export'|'channels'>('channels');
@@ -194,7 +203,7 @@ function App() {
     }
     
     ctx.putImageData(newImgData, 0, 0);
-  }, [channels, originalImgData]);
+  }, [channels, imgVersion]);
 
   useEffect(() => {
     if (!originalImgData || activeRightTab !== 'channels') return;
@@ -251,7 +260,7 @@ function App() {
     drawThumb(gCanvasRef, 'g');
     drawThumb(bCanvasRef, 'b');
     drawThumb(aCanvasRef, 'a');
-  }, [originalImgData, activeRightTab]);
+  }, [activeRightTab, imgVersion]);
 
   const handleCanvasClick = (e: ReactMouseEvent<HTMLCanvasElement>) => {
     if (activeTool === 'pipette') {
