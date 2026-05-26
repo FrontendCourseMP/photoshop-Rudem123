@@ -36,7 +36,7 @@ export function buildLUT(inBlack: number, inWhite: number, gamma: number): Uint8
 }
 
 /** Применяем уровни ко всем каналам без мутации оригинала */
-export function applyLevels(original: ImageData, s: LevelsState): ImageData {
+export function applyLevels(original: ImageData, s: LevelsState, target?: ImageData): ImageData {
   const mLUT = buildLUT(s.master.inBlack, s.master.inWhite, s.master.inGamma);
   const rLUT = buildLUT(s.r.inBlack, s.r.inWhite, s.r.inGamma);
   const gLUT = buildLUT(s.g.inBlack, s.g.inWhite, s.g.inGamma);
@@ -53,7 +53,7 @@ export function applyLevels(original: ImageData, s: LevelsState): ImageData {
     combinedB[i] = bLUT[mLUT[i]];
   }
 
-  const result = new ImageData(original.width, original.height);
+  const result = target || new ImageData(original.width, original.height);
   const d = original.data;
   const resD = result.data;
   const len = d.length;

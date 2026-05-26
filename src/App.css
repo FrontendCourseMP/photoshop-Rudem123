@@ -1,5 +1,4 @@
 /* src/App.css */
-@import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap');
 
 * {
   box-sizing: border-box;
@@ -280,7 +279,7 @@ body {
     linear-gradient(45deg, transparent 75%, #ccc 75%),
     linear-gradient(-45deg, transparent 75%, #ccc 75%);
   background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
   background-color: #fff;
   image-rendering: pixelated; /* Отключаем размытие пикселей при масштабе */
 }

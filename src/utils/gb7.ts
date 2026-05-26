@@ -2,58 +2,109 @@
 const SIGNATURE = [0x47, 0x42, 0x37, 0x1D];
 const VERSION = 0x01;
 
+// ─── Предвычисленные LUT (создаются 1 раз при загрузке модуля) ───────────────
+// Для Uint32Array записи в ImageData (Little-Endian: байты в памяти = R, G, B, A)
+// Uint32 значение: A << 24 | B << 16 | G << 8 | R
+const GRAY7_OPAQUE = new Uint32Array(128);      // alpha = 255
+const GRAY7_TRANSPARENT = new Uint32Array(128);  // alpha = 0
+const GRAY7_TO_8 = new Uint8Array(128);          // gray7 → gray8 (для encode/другого использования)
+
+for (let i = 0; i < 128; i++) {
+    const g = Math.round(i * 255 / 127);
+    GRAY7_TO_8[i] = g;
+    // LE memory layout: [R, G, B, A] = [g, g, g, 0xFF]
+    GRAY7_OPAQUE[i]      = g | (g << 8) | (g << 16) | (0xFF << 24);
+    GRAY7_TRANSPARENT[i] = g | (g << 8) | (g << 16); // alpha = 0
+}
+
 export function decodeGB7(buffer: ArrayBuffer): ImageData {
-    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
 
     // Валидация сигнатуры
     for (let i = 0; i < 4; i++) {
-        if (view.getUint8(i) !== SIGNATURE[i]) {
+        if (bytes[i] !== SIGNATURE[i]) {
             throw new Error("Неверная сигнатура файла");
         }
     }
 
-    // Проверяем что заголовок хотя бы целый
     if (buffer.byteLength < 12) {
         throw new Error("Файл слишком короткий — заголовок обрезан");
     }
 
-    const version = view.getUint8(4);
+    const version = bytes[4];
     if (version !== VERSION) console.warn("Неизвестная версия формата");
 
-    const flag = view.getUint8(5);
-    const hasMask = (flag & 1) === 1; // 0-й бит указывает на наличие маски
+    const flag = bytes[5];
+    const hasMask = (flag & 1) === 1;
 
-    // Размеры в Big-Endian (сетевой порядок)
-    const width = view.getUint16(6, false);
-    const height = view.getUint16(8, false);
+    // Big-Endian чтение ширины и высоты (2 байта DataView нужны только здесь, для заголовка)
+    const width  = (bytes[6] << 8) | bytes[7];
+    const height = (bytes[8] << 8) | bytes[9];
 
-    // Проверяем что данные изображения не обрезаны
-    if (buffer.byteLength < 12 + width * height) {
-        throw new Error(`Файл повреждён: ожидается ${12 + width * height} байт, получено ${buffer.byteLength}`);
+    if (width === 0 || height === 0) {
+        throw new Error("Некорректные размеры изображения");
+    }
+
+    // Авто-определение stride (шага строки с учётом выравнивания)
+    let stride = width;
+    let foundExact = false;
+
+    for (const align of [4, 8, 16, 32, 64, 128]) {
+        const testStride = Math.ceil(width / align) * align;
+        if (12 + testStride * height === buffer.byteLength) {
+            stride = testStride;
+            foundExact = true;
+            break;
+        }
+    }
+
+    if (!foundExact && buffer.byteLength > 12 + width * height) {
+        const testStride = Math.ceil(width / 4) * 4;
+        if (12 + testStride * height <= buffer.byteLength) {
+            stride = testStride;
+        }
+    }
+
+    if (buffer.byteLength < 12 + stride * height) {
+        throw new Error(`Файл повреждён: ожидается ${12 + stride * height} байт, получено ${buffer.byteLength}`);
     }
 
     const imageData = new ImageData(width, height);
+    // Uint32Array view поверх того же буфера — запись 4 байт (RGBA) за 1 операцию
+    const pixels32 = new Uint32Array(imageData.data.buffer);
+
     let offset = 12;
+    const padding = stride - width;
 
-    for (let i = 0; i < width * height; i++) {
-        const byte = view.getUint8(offset++);
-
-        // Вытаскиваем 7 бит для оттенка серого
-        const gray7 = byte & 0x7F;
-        
-        // Масштабируем 7 бит (0-127) до 8 бит (0-255)
-        const gray8 = (gray7 << 1) | (gray7 >> 6);
-
-        // 7-й бит отвечает за маску
-        const maskBit = (byte & 0x80) >> 7;
-        const alpha = hasMask ? (maskBit === 1 ? 255 : 0) : 255;
-
-        // Заполняем RGBA пиксель для канваса
-        const pxIdx = i * 4;
-        imageData.data[pxIdx] = gray8;     // R
-        imageData.data[pxIdx + 1] = gray8; // G
-        imageData.data[pxIdx + 2] = gray8; // B
-        imageData.data[pxIdx + 3] = alpha; // A
+    // Выносим ветвление hasMask ЗА цикл — убираем branch на каждый пиксель
+    if (hasMask) {
+        for (let y = 0; y < height; y++) {
+            const rowEnd = offset + width;
+            if (rowEnd > buffer.byteLength) {
+                throw new Error(`Файл повреждён: данные обрезаны на строке ${y}`);
+            }
+            let pxIdx = y * width;
+            for (let x = 0; x < width; x++) {
+                const byte = bytes[offset++];
+                const gray7 = byte & 0x7F;
+                // Старший бит → выбор LUT с alpha=255 или alpha=0
+                pixels32[pxIdx++] = (byte & 0x80) ? GRAY7_OPAQUE[gray7] : GRAY7_TRANSPARENT[gray7];
+            }
+            offset += padding;
+        }
+    } else {
+        for (let y = 0; y < height; y++) {
+            const rowEnd = offset + width;
+            if (rowEnd > buffer.byteLength) {
+                throw new Error(`Файл повреждён: данные обрезаны на строке ${y}`);
+            }
+            let pxIdx = y * width;
+            for (let x = 0; x < width; x++) {
+                // Без маски: всегда alpha=255, один LUT lookup + одна запись
+                pixels32[pxIdx++] = GRAY7_OPAQUE[bytes[offset++] & 0x7F];
+            }
+            offset += padding;
+        }
     }
 
     return imageData;
@@ -61,41 +112,49 @@ export function decodeGB7(buffer: ArrayBuffer): ImageData {
 
 export function encodeGB7(imageData: ImageData, useMask: boolean): Blob {
     const { width, height, data } = imageData;
-    const buffer = new ArrayBuffer(12 + width * height);
-    const view = new DataView(buffer);
+    const bufSize = 12 + width * height;
+    const buffer = new ArrayBuffer(bufSize);
+    const out = new Uint8Array(buffer);
 
-    // Пишем заголовок
-    view.setUint8(0, SIGNATURE[0]);
-    view.setUint8(1, SIGNATURE[1]);
-    view.setUint8(2, SIGNATURE[2]);
-    view.setUint8(3, SIGNATURE[3]);
-    view.setUint8(4, VERSION);
-    view.setUint8(5, useMask ? 1 : 0);
-    view.setUint16(6, width, false); // Big-Endian
-    view.setUint16(8, height, false);
-    view.setUint16(10, 0, false);    // Резерв
+    // Заголовок (12 байт — используем прямую запись в Uint8Array)
+    out[0] = SIGNATURE[0];
+    out[1] = SIGNATURE[1];
+    out[2] = SIGNATURE[2];
+    out[3] = SIGNATURE[3];
+    out[4] = VERSION;
+    out[5] = useMask ? 1 : 0;
+    // Big-Endian width/height
+    out[6] = (width >> 8) & 0xFF;
+    out[7] = width & 0xFF;
+    out[8] = (height >> 8) & 0xFF;
+    out[9] = height & 0xFF;
+    out[10] = 0; // Резерв
+    out[11] = 0;
+
+    // Предвычисленная LUT для gray8 → gray7
+    // (127 уникальных входных значений можно кэшировать для 256 входов)
+    const GRAY8_TO_7 = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) {
+        GRAY8_TO_7[i] = Math.round(i * 127 / 255);
+    }
 
     let offset = 12;
-    for (let i = 0; i < width * height; i++) {
-        const pxIdx = i * 4;
-        const r = data[pxIdx];
-        const g = data[pxIdx + 1];
-        const b = data[pxIdx + 2];
-        const a = data[pxIdx + 3];
+    const totalPixels = width * height;
 
-        // Переводим в серое через Luma и сжимаем до 7 бит
-        const gray8 = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-        const gray7 = gray8 >> 1;
-
-        let byte = gray7 & 0x7F;
-
-        if (useMask) {
-            // Записываем маску в старший бит, если альфа > 127
-            const isOpaque = a > 127 ? 1 : 0;
-            byte |= (isOpaque << 7);
+    if (useMask) {
+        for (let i = 0; i < totalPixels; i++) {
+            const pxIdx = i * 4;
+            const gray8 = Math.round(0.299 * data[pxIdx] + 0.587 * data[pxIdx + 1] + 0.114 * data[pxIdx + 2]);
+            let byte = GRAY8_TO_7[gray8] & 0x7F;
+            if (data[pxIdx + 3] > 127) byte |= 0x80;
+            out[offset++] = byte;
         }
-
-        view.setUint8(offset++, byte);
+    } else {
+        for (let i = 0; i < totalPixels; i++) {
+            const pxIdx = i * 4;
+            const gray8 = Math.round(0.299 * data[pxIdx] + 0.587 * data[pxIdx + 1] + 0.114 * data[pxIdx + 2]);
+            out[offset++] = GRAY8_TO_7[gray8] & 0x7F;
+        }
     }
 
     return new Blob([buffer], { type: "application/octet-stream" });

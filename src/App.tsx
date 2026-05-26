@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { type ChangeEvent, type MouseEvent as ReactMouseEvent, useRef, useState, useEffect, useCallback } from 'react';
 import { decodeGB7, encodeGB7 } from './utils/gb7';
 import {
   MousePointer2, Move, Lasso, Crop, Pipette,
@@ -43,6 +43,10 @@ function App() {
   const [filename, setFilename] = useState<string>('Без имени-1');
 
   const [originalImgData, setOriginalImgData] = useState<ImageData | null>(null);
+  const originalImgDataRef = useRef<ImageData | null>(null);
+  // Синхронизируем ref с state для доступа из стабильных callback'ов
+  useEffect(() => { originalImgDataRef.current = originalImgData; }, [originalImgData]);
+
   const [channels, setChannels] = useState({ r: true, g: true, b: true, a: true });
   const [activeRightTab, setActiveRightTab] = useState<'export'|'channels'>('channels');
   const [activeTool, setActiveTool] = useState<string>('pipette');
@@ -57,21 +61,22 @@ function App() {
   const aCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Загрузка файла (картинка или GB7)
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Сбрасываем value инпута чтобы повторная загрузка того же файла вызывала onChange
+    event.target.value = '';
+
     setFilename(file.name);
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
 
     if (file.name.toLowerCase().endsWith('.gb7')) {
       const buffer = await file.arrayBuffer();
       try {
         const imageData = decodeGB7(buffer);
-        canvas.width = imageData.width;
-        canvas.height = imageData.height;
+        // НЕ трогаем canvasRef здесь — он указывает на скрытый canvas,
+        // который будет уничтожен React'ом при setMeta.
+        // Видимый canvas получит правильные размеры в useEffect.
         setOriginalImgData(imageData);
         setChannels({ r: true, g: true, b: true, a: true });
         setMeta({ width: imageData.width, height: imageData.height, depth: "8 бит (GB7)" });
@@ -82,14 +87,19 @@ function App() {
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        // Используем offscreen canvas для извлечения пиксельных данных,
+        // а не canvasRef (который указывает на скрытый элемент)
+        const off = document.createElement('canvas');
+        off.width = img.width;
+        off.height = img.height;
+        const offCtx = off.getContext('2d');
+        if (!offCtx) return;
+        offCtx.drawImage(img, 0, 0);
+        const imageData = offCtx.getImageData(0, 0, img.width, img.height);
         setOriginalImgData(imageData);
         setChannels({ r: true, g: true, b: true, a: true });
         setMeta({ width: img.width, height: img.height, depth: "32 бит (RGBA)" });
-        URL.revokeObjectURL(objectUrl); // Освобождаем память после отрисовки
+        URL.revokeObjectURL(objectUrl);
       };
       img.onerror = () => {
         alert('Не удалось загрузить изображение');
@@ -100,16 +110,24 @@ function App() {
   };
 
   // Скачивание и сохранение файла
+  // ВАЖНО: экспортируем из originalImgData, а НЕ с canvas, т.к. canvas
+  // может содержать отфильтрованные каналы (R/G/B обнулены).
   const handleDownload = (format: 'png' | 'jpeg' | 'gb7-mask' | 'gb7-nomask') => {
-    const canvas = canvasRef.current;
-    if (!canvas || !meta) return;
+    if (!originalImgData || !meta) return;
 
     let downloadUrl = '';
     let outFilename = filename.split('.')[0] + `_export.${format.split('-')[0]}`;
 
     if (format === 'png' || format === 'jpeg') {
-      // Используем dataURL напрямую — revokeObjectURL здесь не нужен
-      downloadUrl = canvas.toDataURL(`image/${format}`);
+      // Рисуем оригинальные данные на временный offscreen canvas для чистого экспорта
+      const offscreen = document.createElement('canvas');
+      offscreen.width = originalImgData.width;
+      offscreen.height = originalImgData.height;
+      const offCtx = offscreen.getContext('2d');
+      if (!offCtx) return;
+      offCtx.putImageData(originalImgData, 0, 0);
+
+      downloadUrl = offscreen.toDataURL(`image/${format}`);
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.download = outFilename;
@@ -118,11 +136,8 @@ function App() {
       document.body.removeChild(link);
       return;
     } else {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const useMask = format === 'gb7-mask';
-      const blob = encodeGB7(imageData, useMask);
+      const blob = encodeGB7(originalImgData, useMask);
       downloadUrl = URL.createObjectURL(blob);
       outFilename = useMask ? `${filename.split('.')[0]}_mask.gb7` : `${filename.split('.')[0]}_nomask.gb7`;
     }
@@ -146,6 +161,14 @@ function App() {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    
+    // Устанавливаем внутреннее разрешение canvas если оно не совпадает.
+    // Это критически важно: при первой загрузке React монтирует НОВЫЙ canvas
+    // элемент (вместо скрытого), и его дефолтный размер 300×150.
+    if (canvas.width !== originalImgData.width || canvas.height !== originalImgData.height) {
+      canvas.width = originalImgData.width;
+      canvas.height = originalImgData.height;
+    }
     
     const newImgData = new ImageData(
       new Uint8ClampedArray(originalImgData.data),
@@ -174,19 +197,40 @@ function App() {
   }, [channels, originalImgData]);
 
   useEffect(() => {
-    if (!originalImgData) return;
+    if (!originalImgData || activeRightTab !== 'channels') return;
+
+    // 1. Создаём миниатюру оригинального изображения для быстрого обхода (ширина 160px)
+    const scale = Math.min(160 / originalImgData.width, 1);
+    const thumbW = Math.max(1, Math.floor(originalImgData.width * scale));
+    const thumbH = Math.max(1, Math.floor(originalImgData.height * scale));
+
+    const off = document.createElement('canvas');
+    off.width = originalImgData.width;
+    off.height = originalImgData.height;
+    off.getContext('2d')!.putImageData(originalImgData, 0, 0);
+
+    const small = document.createElement('canvas');
+    small.width = thumbW;
+    small.height = thumbH;
+    const smallCtx = small.getContext('2d')!;
+    smallCtx.drawImage(off, 0, 0, thumbW, thumbH);
+    const baseThumbData = smallCtx.getImageData(0, 0, thumbW, thumbH);
+
+    // 2. Функция применения фильтра к заранее уменьшенной картинке
     const drawThumb = (ref: React.RefObject<HTMLCanvasElement | null>, type: 'r' | 'g' | 'b' | 'a') => {
       const canvas = ref.current;
       if (!canvas) return;
-      canvas.width = originalImgData.width;
-      canvas.height = originalImgData.height;
+      canvas.width = thumbW;
+      canvas.height = thumbH;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+      
       const thumbData = new ImageData(
-        new Uint8ClampedArray(originalImgData.data),
-        originalImgData.width,
-        originalImgData.height
+        new Uint8ClampedArray(baseThumbData.data),
+        thumbW,
+        thumbH
       );
+
       for (let i = 0; i < thumbData.data.length; i += 4) {
           if (type === 'r') {
              thumbData.data[i+1] = 0; thumbData.data[i+2] = 0; thumbData.data[i+3] = 255;
@@ -202,13 +246,14 @@ function App() {
       }
       ctx.putImageData(thumbData, 0, 0);
     }
+
     drawThumb(rCanvasRef, 'r');
     drawThumb(gCanvasRef, 'g');
     drawThumb(bCanvasRef, 'b');
     drawThumb(aCanvasRef, 'a');
   }, [originalImgData, activeRightTab]);
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasClick = (e: ReactMouseEvent<HTMLCanvasElement>) => {
     if (activeTool === 'pipette') {
       if (!originalImgData || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
@@ -236,6 +281,29 @@ function App() {
       });
     }
   };
+
+  // ─── Callbacks для LevelsDialog (стабильные ссылки) ───────────────────────
+  const handleLevelsPreview = useCallback((data: ImageData | null) => {
+    const current = originalImgDataRef.current;
+    if (!canvasRef.current || !current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+    ctx.putImageData(data ?? current, 0, 0);
+  }, []);
+
+  const handleLevelsApply = useCallback((data: ImageData) => {
+    setOriginalImgData(data);
+    setLevelsOpen(false);
+  }, []);
+
+  const handleLevelsCancel = useCallback(() => {
+    const current = originalImgDataRef.current;
+    if (canvasRef.current && current) {
+      const ctx = canvasRef.current.getContext('2d');
+      ctx?.putImageData(current, 0, 0);
+    }
+    setLevelsOpen(false);
+  }, []);
 
   return (
     <div className="ps-app">
@@ -479,23 +547,9 @@ function App() {
       <LevelsDialog
         open={levelsOpen}
         originalImgData={originalImgData}
-        onPreview={useCallback((data: ImageData | null) => {
-          if (!canvasRef.current || !originalImgData) return;
-          const ctx = canvasRef.current.getContext('2d');
-          if (!ctx) return;
-          ctx.putImageData(data ?? originalImgData, 0, 0);
-        }, [originalImgData])}
-        onApply={useCallback((data: ImageData) => {
-          setOriginalImgData(data);
-          setLevelsOpen(false);
-        }, [])}
-        onCancel={useCallback(() => {
-          if (canvasRef.current && originalImgData) {
-            const ctx = canvasRef.current.getContext('2d');
-            ctx?.putImageData(originalImgData, 0, 0);
-          }
-          setLevelsOpen(false);
-        }, [originalImgData])}
+        onPreview={handleLevelsPreview}
+        onApply={handleLevelsApply}
+        onCancel={handleLevelsCancel}
       />
     </div>
   );

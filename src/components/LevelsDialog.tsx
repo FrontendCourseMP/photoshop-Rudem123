@@ -69,8 +69,17 @@ function LevelsSlider({ ch, onChange }: SliderProps) {
     // Локальная переменная для отслеживания drag — только внутри closure
     let activeDrag: 'black' | 'gamma' | 'white' | null = null;
 
+    let lastMoveTime = 0;
+
     const move = (e: MouseEvent) => {
       if (!activeDrag) return;
+      
+      // Троттлинг: обновляем состояние не чаще чем раз в ~30 мс (около 30 кадров в сек)
+      // чтобы не заваливать React обновлениями и не вешать браузер (ошибка "Страница не отвечает")
+      const now = performance.now();
+      if (now - lastMoveTime < 32) return;
+      lastMoveTime = now;
+
       const { inBlack: b, inWhite: w, gammaDisplayVal: gdv, onChange: cb } = propsRef.current;
       const val = valFromMouse(e.clientX);
       if (activeDrag === 'black') {
@@ -152,11 +161,17 @@ export default function LevelsDialog({ open, originalImgData, onPreview, onApply
   const dialogRef = useRef<HTMLDialogElement>(null);
   const histRef   = useRef<HTMLCanvasElement>(null);
   const rafRef    = useRef<number | null>(null);
+  const previewBufferRef = useRef<ImageData | null>(null);
 
   const [activeChannel, setActiveChannel] = useState<LevelsChannel>('master');
   const [levels, setLevels]   = useState<LevelsState>(makeDefaultLevels);
   const [logScale, setLogScale] = useState(false);
   const [preview, setPreview]   = useState(true);
+
+  // Сбрасываем буфер превью, если изменилась исходная картинка
+  useEffect(() => {
+    previewBufferRef.current = null;
+  }, [originalImgData]);
 
   // Открытие/закрытие диалога
   useEffect(() => {
@@ -177,13 +192,18 @@ export default function LevelsDialog({ open, originalImgData, onPreview, onApply
     drawHist(histRef.current, counts, logScale, activeChannel);
   }, [open, originalImgData, activeChannel, logScale]);
 
-  // Предпросмотр (через rAF — не перегружаем)
+  // Предпросмотр (через rAF — не перегружаем и переиспользуем буфер памяти)
   useEffect(() => {
     if (!open || !originalImgData) return;
     if (!preview) { onPreview(null); return; }
+
+    if (!previewBufferRef.current || previewBufferRef.current.width !== originalImgData.width || previewBufferRef.current.height !== originalImgData.height) {
+      previewBufferRef.current = new ImageData(originalImgData.width, originalImgData.height);
+    }
+
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
-      onPreview(applyLevels(originalImgData, levels));
+      onPreview(applyLevels(originalImgData, levels, previewBufferRef.current!));
     });
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [levels, preview, open, originalImgData, onPreview]);
