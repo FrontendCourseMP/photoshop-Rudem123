@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import LevelsDialog from './components/LevelsDialog';
 import ResizeDialog from './components/ResizeDialog';
+import ConvolutionDialog from './components/ConvolutionDialog';
 import './App.css';
 
 interface ImageMeta {
@@ -66,6 +67,7 @@ function App() {
   const [zoomMode, setZoomMode] = useState<'in' | 'out'>('in');
   const [levelsOpen, setLevelsOpen] = useState(false);
   const [resizeOpen, setResizeOpen] = useState(false);
+  const [convolutionOpen, setConvolutionOpen] = useState(false);
   const [displayInterp, setDisplayInterp] = useState<InterpolationMethod>('bilinear');
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -344,6 +346,29 @@ function App() {
     setResizeOpen(false);
   }, [meta?.depth]);
 
+  // ─── Callbacks для ConvolutionDialog ───────────────────────────────────────
+  const handleConvPreview = useCallback((data: ImageData | null) => {
+    const current = originalImgDataRef.current;
+    if (!canvasRef.current || !current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+    const src = data ?? current;
+    const scaledW = canvasRef.current.width;
+    const scaledH = canvasRef.current.height;
+    const scaled = resizeImageData(src, scaledW, scaledH, 'nearest');
+    ctx.putImageData(scaled, 0, 0);
+  }, []);
+
+  const handleConvApply = useCallback((data: ImageData) => {
+    setOriginalImgData(data);
+    setConvolutionOpen(false);
+  }, []);
+
+  const handleConvCancel = useCallback(() => {
+    setConvolutionOpen(false);
+    setImgVersion(v => v + 1);
+  }, []);
+
   return (
     <div className="ps-app">
       {/* Главное меню сверху */}
@@ -353,10 +378,7 @@ function App() {
         <div className="ps-menu-item">Редактирование</div>
         <div className="ps-menu-item" onClick={() => meta && setLevelsOpen(true)}>Уровни</div>
         <div className="ps-menu-item" onClick={() => meta && setResizeOpen(true)}>Размер изображения</div>
-        <div className="ps-menu-item">Слои</div>
-        <div className="ps-menu-item">Текст</div>
-        <div className="ps-menu-item">Выделение</div>
-        <div className="ps-menu-item">Фильтр</div>
+        <div className="ps-menu-item" onClick={() => meta && setConvolutionOpen(true)}>Фильтр</div>
         <div className="ps-menu-item">3D</div>
         <div className="ps-menu-item">Просмотр</div>
         <div className="ps-menu-item">Окно</div>
@@ -619,6 +641,15 @@ function App() {
         originalImgData={originalImgData}
         onApply={handleResizeApply}
         onCancel={() => setResizeOpen(false)}
+      />
+
+      {/* Диалог «Фильтр (Свёртка)» */}
+      <ConvolutionDialog
+        open={convolutionOpen}
+        originalImgData={originalImgData}
+        onPreview={handleConvPreview}
+        onApply={handleConvApply}
+        onCancel={handleConvCancel}
       />
     </div>
   );
