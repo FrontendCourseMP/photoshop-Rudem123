@@ -281,7 +281,7 @@ body {
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
   background-color: #fff;
-  image-rendering: pixelated; /* Отключаем размытие пикселей при масштабе */
+  /* Не используем CSS image-rendering — масштабирование через кастомную интерполяцию */
 }
 
 /* Боковые панели справа */
@@ -446,29 +446,55 @@ body {
 /* Строка состояния (подвал) */
 .ps-statusbar {
   background-color: #383838;
-  height: 22px;
+  height: 26px;
   border-top: 1px solid #222;
   display: flex;
   align-items: center;
   padding: 0 10px;
   font-size: 11px;
   color: #aaa;
+  gap: 12px;
 }
 
 .ps-status-zoom {
-  width: 45px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ps-status-range {
+  width: 80px;
+  height: 3px;
+  accent-color: #31a8ff;
+  cursor: pointer;
+}
+
+.ps-status-zoom-val {
+  width: 40px;
   color: #ccc;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-status-interp {
+  flex-shrink: 0;
+}
+
+.ps-status-select {
+  background: #4a4a4a;
+  border: 1px solid #333;
+  color: #ccc;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  cursor: pointer;
 }
 
 .ps-status-info {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.ps-status-arrow {
-  font-size: 12px;
-  margin-left: 5px;
+  color: #aaa;
 }
 
 /* ═══ Диалог «Уровни» ═══════════════════════════════════════════════════════ */
