@@ -2,10 +2,7 @@ import { type ChangeEvent, type MouseEvent as ReactMouseEvent, useRef, useState,
 import { decodeGB7, encodeGB7 } from './utils/gb7';
 import { type InterpolationMethod, resizeImageData, INTERPOLATION_METHODS, INTERPOLATION_KEYS } from './utils/interpolation';
 import {
-  MousePointer2, Move, Lasso, Crop, Pipette,
-  PaintBucket, Eraser, Type, ZoomIn, ZoomOut, Hand,
-  Image as ImageIcon, Download,
-  SquareDashed, Paintbrush, PenTool, Home
+  Pipette, ZoomIn, ZoomOut, Download
 } from 'lucide-react';
 import LevelsDialog from './components/LevelsDialog';
 import ResizeDialog from './components/ResizeDialog';
@@ -375,14 +372,9 @@ function App() {
       <header className="ps-menubar">
         <div className="ps-ps-logo">Ps</div>
         <div className="ps-menu-item" onClick={triggerFileInput}>Файл</div>
-        <div className="ps-menu-item">Редактирование</div>
         <div className="ps-menu-item" onClick={() => meta && setLevelsOpen(true)}>Уровни</div>
         <div className="ps-menu-item" onClick={() => meta && setResizeOpen(true)}>Размер изображения</div>
         <div className="ps-menu-item" onClick={() => meta && setConvolutionOpen(true)}>Фильтр</div>
-        <div className="ps-menu-item">3D</div>
-        <div className="ps-menu-item">Просмотр</div>
-        <div className="ps-menu-item">Окно</div>
-        <div className="ps-menu-item">Справка</div>
       </header>
 
       {/* Панель параметров выбранного инструмента */}
@@ -443,40 +435,14 @@ function App() {
               setZoom(Math.round(scale));
             }}>Подогнать</button>
           </>
-        ) : (
-          <>
-            <div className="ps-opt-icon"><Home size={14} /></div>
-            <div className="ps-opt-divider"></div>
-            <div className="ps-opt-icon active"><SquareDashed size={14} /></div>
-            <div className="ps-opt-divider"></div>
-            <div className="ps-opt-item"><span>Растушевка:</span> <input type="text" value="0 пикс." readOnly /></div>
-            <div className="ps-opt-item"><input type="checkbox" disabled /> Сглаживание</div>
-            <div className="ps-opt-item"><span>Стиль:</span> <select disabled><option>Обычный</option></select></div>
-            <button className="ps-btn-mask">Выделение и маска...</button>
-          </>
-        )}
+        ) : null}
       </div>
 
       <div className="ps-body">
-        {/* Боковая панель инструментов (как в Photoshop) */}
+        {/* Панель инструментов */}
         <aside className="ps-toolbar">
-          <div className={`ps-tool ${activeTool === 'move' ? 'active' : ''}`} onClick={() => setActiveTool('move')}><Move size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'select' ? 'active' : ''}`} onClick={() => setActiveTool('select')}><SquareDashed size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'lasso' ? 'active' : ''}`} onClick={() => setActiveTool('lasso')}><Lasso size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'crop' ? 'active' : ''}`} onClick={() => setActiveTool('crop')}><Crop size={16} /></div>
           <div className={`ps-tool ${activeTool === 'pipette' ? 'active' : ''}`} onClick={() => setActiveTool('pipette')}><Pipette size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'brush' ? 'active' : ''}`} onClick={() => setActiveTool('brush')}><Paintbrush size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'bucket' ? 'active' : ''}`} onClick={() => setActiveTool('bucket')}><PaintBucket size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => setActiveTool('eraser')}><Eraser size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'pen' ? 'active' : ''}`} onClick={() => setActiveTool('pen')}><PenTool size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'type' ? 'active' : ''}`} onClick={() => setActiveTool('type')}><Type size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'pointer' ? 'active' : ''}`} onClick={() => setActiveTool('pointer')}><MousePointer2 size={16} /></div>
-          <div className={`ps-tool ${activeTool === 'hand' ? 'active' : ''}`} onClick={() => setActiveTool('hand')}><Hand size={16} /></div>
           <div className={`ps-tool ${activeTool === 'zoom' ? 'active' : ''}`} onClick={() => setActiveTool('zoom')}><ZoomIn size={16} /></div>
-          <div className="ps-colors">
-            <div className="ps-color-fg"></div>
-            <div className="ps-color-bg"></div>
-          </div>
         </aside>
 
         {/* Рабочая зона с холстом */}
@@ -518,39 +484,6 @@ function App() {
 
         {/* Боковые панели справа */}
         <aside className="ps-right-panels">
-          {/* Выбор цвета */}
-          <div className="ps-panel ps-panel-color">
-            <div className="ps-panel-tabs">
-              <div className="ps-ptab active">Цвет</div>
-              <div className="ps-ptab">Образцы</div>
-              <div className="ps-ptab">Градиенты</div>
-            </div>
-            <div className="ps-panel-body">
-              <div className="ps-color-picker-mock"></div>
-            </div>
-          </div>
-
-          {/* Панель со свойствами холста */}
-          <div className="ps-panel ps-panel-properties">
-            <div className="ps-panel-tabs">
-              <div className="ps-ptab active">Свойства</div>
-              <div className="ps-ptab">Коррекция</div>
-            </div>
-            <div className="ps-panel-body">
-              <div className="ps-prop-section"><ImageIcon size={14} style={{ marginRight: 6 }} /> Документ</div>
-              <div className="ps-prop-section">
-                <div style={{ marginBottom: 10 }}>v Холст</div>
-                <div className="ps-canvas-props">
-                  <div className="ps-prop-row">
-                    <span>Ш</span> <input type="text" value={meta ? `${meta.width} пикс.` : ''} readOnly />
-                  </div>
-                  <div className="ps-prop-row">
-                    <span>В</span> <input type="text" value={meta ? `${meta.height} пикс.` : ''} readOnly />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Функции экспорта и каналы */}
           <div className="ps-panel ps-panel-layers">
