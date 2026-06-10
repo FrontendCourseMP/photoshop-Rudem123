@@ -461,7 +461,10 @@ function App() {
             <div className="ps-opt-item"><span>Y:</span> <input type="text" style={{ width: 40 }} value={pickedColor.y} readOnly /></div>
             <div className="ps-opt-divider"></div>
             <div style={{ width: 16, height: 16, backgroundColor: `rgb(${pickedColor.r},${pickedColor.g},${pickedColor.b})`, border: '1px solid #777' }}></div>
-            <div className="ps-opt-item"><span>RGB:</span> <input type="text" style={{ width: 90 }} value={`${pickedColor.r}, ${pickedColor.g}, ${pickedColor.b}`} readOnly /></div>
+            <div className="ps-opt-item">
+              <span>{meta && meta.channels <= 2 ? 'Серый:' : 'RGB:'}</span> 
+              <input type="text" style={{ width: meta && meta.channels <= 2 ? 40 : 90 }} value={meta && meta.channels <= 2 ? pickedColor.r : `${pickedColor.r}, ${pickedColor.g}, ${pickedColor.b}`} readOnly />
+            </div>
             <div className="ps-opt-item"><span>LAB:</span> <input type="text" style={{ width: 130 }} value={`${pickedColor.lab.l.toFixed(2)}, ${pickedColor.lab.a.toFixed(2)}, ${pickedColor.lab.b.toFixed(2)}`} readOnly /></div>
           </>
         ) : activeTool === 'zoom' ? (
@@ -720,6 +723,7 @@ function App() {
         open={levelsOpen}
         originalImgData={originalImgData}
         isGB7={meta?.depth.includes('7 бит') || meta?.depth.includes('8 бит (7 Gray')}
+        numChannels={meta?.channels || 4}
         onPreview={handleLevelsPreview}
         onApply={handleLevelsApply}
         onCancel={handleLevelsCancel}

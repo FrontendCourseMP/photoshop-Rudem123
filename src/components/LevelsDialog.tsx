@@ -163,12 +163,13 @@ interface Props {
   open: boolean;
   originalImgData: ImageData | null;
   isGB7?: boolean;
+  numChannels?: number;
   onPreview: (data: ImageData | null) => void;
   onApply: (data: ImageData) => void;
   onCancel: () => void;
 }
 
-export default function LevelsDialog({ open, originalImgData, isGB7 = false, onPreview, onApply, onCancel }: Props) {
+export default function LevelsDialog({ open, originalImgData, isGB7 = false, numChannels = 4, onPreview, onApply, onCancel }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const histRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
@@ -244,8 +245,14 @@ export default function LevelsDialog({ open, originalImgData, isGB7 = false, onP
         {/* Выбор канала */}
         <select className="lv-channel-select" value={activeChannel}
           onChange={e => setActiveChannel(e.target.value as LevelsChannel)}>
-          {(Object.keys(CHANNEL_LABELS) as LevelsChannel[]).map(k => (
-            <option key={k} value={k}>{CHANNEL_LABELS[k]}</option>
+          {(Object.keys(CHANNEL_LABELS) as LevelsChannel[]).filter(k => {
+            if (numChannels === 1) return k === 'master';
+            if (numChannels === 2) return k === 'master' || k === 'a';
+            return true;
+          }).map(k => (
+            <option key={k} value={k}>
+              {k === 'master' && numChannels <= 2 ? 'Серый (Gray)' : CHANNEL_LABELS[k]}
+            </option>
           ))}
         </select>
       </div>
