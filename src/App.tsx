@@ -356,9 +356,14 @@ function App() {
   // ─── Callback для ResizeDialog ─────────────────────────────────────────────
   const handleResizeApply = useCallback((data: ImageData) => {
     setOriginalImgData(data);
-    setMeta({ width: data.width, height: data.height, depth: meta?.depth ?? '32 бит (RGBA)', channels: meta?.channels ?? 4 });
+    setMeta(prev => ({ 
+      width: data.width, 
+      height: data.height, 
+      depth: prev?.depth ?? '32 бит (RGBA)', 
+      channels: prev?.channels ?? 4 
+    }));
     setResizeOpen(false);
-  }, [meta?.depth]);
+  }, []);
 
   // ─── Callbacks для ConvolutionDialog ───────────────────────────────────────
   const handleConvPreview = useCallback((data: ImageData | null) => {
