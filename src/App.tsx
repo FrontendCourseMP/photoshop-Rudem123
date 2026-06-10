@@ -3,7 +3,7 @@ import { decodeGB7, encodeGB7, getGB7Depth } from './utils/gb7';
 import { getImageDepth } from './utils/metadata';
 import { type InterpolationMethod, resizeImageData, INTERPOLATION_METHODS, INTERPOLATION_KEYS } from './utils/interpolation';
 import {
-  Pipette, ZoomIn, ZoomOut, Download, Eye, EyeOff
+  Pipette, ZoomIn, ZoomOut, Download, Eye, EyeOff, Hand
 } from 'lucide-react';
 import LevelsDialog from './components/LevelsDialog';
 import ResizeDialog from './components/ResizeDialog';
@@ -54,6 +54,7 @@ function App() {
     setImgVersion(v => v + 1);
   }, []);
 
+  // eslint-disable-next-line react-hooks/refs
   const originalImgData = originalImgDataRef.current;
 
   const [channels, setChannels] = useState({ r: true, g: true, b: true, a: true });
@@ -66,7 +67,30 @@ function App() {
   const [resizeOpen, setResizeOpen] = useState(false);
   const [convolutionOpen, setConvolutionOpen] = useState(false);
   const [displayInterp, setDisplayInterp] = useState<InterpolationMethod>('bilinear');
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isDraggingHand, setIsDraggingHand] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const startPanRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && e.target === document.body) {
+        e.preventDefault();
+        setIsSpacePressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   const rCanvasRef = useRef<HTMLCanvasElement>(null);
   const gCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -85,11 +109,7 @@ function App() {
   }, []);
 
   // Загрузка файла (картинка или GB7)
-  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    event.target.value = '';
+  const processFile = async (file: File) => {
     setFilename(file.name);
 
     const applyImage = (imageData: ImageData, depth: string, channels: number) => {
@@ -131,6 +151,13 @@ function App() {
       };
       img.src = objectUrl;
     }
+  };
+
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = '';
+    processFile(file);
   };
 
   // Экспорт оригинальных данных (без учета отключенных каналов)
@@ -187,7 +214,7 @@ function App() {
 
     // 1. Применяем канальный фильтр на оригинальных данных (только если нужно)
     const ch = meta?.channels || 4;
-    let allChannels = false;
+    let allChannels: boolean;
     if (ch === 1) allChannels = channels.r;
     else if (ch === 2) allChannels = channels.r && channels.a;
     else if (ch === 3) allChannels = channels.r && channels.g && channels.b;
@@ -203,7 +230,7 @@ function App() {
       );
 
       const onlyAlpha = (ch === 2 && !channels.r && channels.a) || (ch === 4 && !channels.r && !channels.g && !channels.b && channels.a);
-      
+
       for (let i = 0; i < sourceForResize.data.length; i += 4) {
         if (onlyAlpha) {
           const a = originalImgData.data[i + 3];
@@ -214,11 +241,11 @@ function App() {
         } else {
           if (ch <= 2) {
             if (!channels.r) {
-               sourceForResize.data[i] = 0;
-               sourceForResize.data[i+1] = 0;
-               sourceForResize.data[i+2] = 0;
+              sourceForResize.data[i] = 0;
+              sourceForResize.data[i + 1] = 0;
+              sourceForResize.data[i + 2] = 0;
             }
-            if (ch === 2 && !channels.a) sourceForResize.data[i+3] = 255;
+            if (ch === 2 && !channels.a) sourceForResize.data[i + 3] = 255;
           } else {
             if (!channels.r) sourceForResize.data[i] = 0;
             if (!channels.g) sourceForResize.data[i + 1] = 0;
@@ -335,11 +362,18 @@ function App() {
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
     const src = data ?? current;
-    // Масштабируем превью под текущий зум
-    const scaledW = canvasRef.current.width;
-    const scaledH = canvasRef.current.height;
-    const scaled = resizeImageData(src, scaledW, scaledH, 'nearest');
-    ctx.putImageData(scaled, 0, 0);
+
+    // Используем аппаратное ускорение (GPU) для быстрого предпросмотра
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = src.width;
+    tempCanvas.height = src.height;
+    const tCtx = tempCanvas.getContext('2d');
+    if (!tCtx) return;
+    tCtx.putImageData(src, 0, 0);
+
+    ctx.imageSmoothingEnabled = false; // для эффекта 'nearest'
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    ctx.drawImage(tempCanvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
   }, []);
 
   const handleLevelsApply = useCallback((data: ImageData) => {
@@ -357,11 +391,11 @@ function App() {
   // ─── Callback для ResizeDialog ─────────────────────────────────────────────
   const handleResizeApply = useCallback((data: ImageData) => {
     setOriginalImgData(data);
-    setMeta(prev => ({ 
-      width: data.width, 
-      height: data.height, 
-      depth: prev?.depth ?? '32 бит (RGBA)', 
-      channels: prev?.channels ?? 4 
+    setMeta(prev => ({
+      width: data.width,
+      height: data.height,
+      depth: prev?.depth ?? '32 бит (RGBA)',
+      channels: prev?.channels ?? 4
     }));
     setZoom(computeAutoFitZoom(data.width, data.height));
     setResizeOpen(false);
@@ -374,10 +408,18 @@ function App() {
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
     const src = data ?? current;
-    const scaledW = canvasRef.current.width;
-    const scaledH = canvasRef.current.height;
-    const scaled = resizeImageData(src, scaledW, scaledH, 'nearest');
-    ctx.putImageData(scaled, 0, 0);
+
+    // Используем аппаратное ускорение (GPU) для быстрого предпросмотра
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = src.width;
+    tempCanvas.height = src.height;
+    const tCtx = tempCanvas.getContext('2d');
+    if (!tCtx) return;
+    tCtx.putImageData(src, 0, 0);
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    ctx.drawImage(tempCanvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
   }, []);
 
   const handleConvApply = useCallback((data: ImageData) => {
@@ -391,7 +433,15 @@ function App() {
   }, []);
 
   return (
-    <div className="ps-app">
+    <div
+      className="ps-app"
+      onDragOver={e => e.preventDefault()}
+      onDrop={e => {
+        e.preventDefault();
+        const file = e.dataTransfer?.files[0];
+        if (file) processFile(file);
+      }}
+    >
       {/* Главное меню сверху */}
       <header className="ps-menubar">
         <div className="ps-ps-logo">Ps</div>
@@ -445,8 +495,8 @@ function App() {
                 onChange={(e) => setZoom(Number(e.target.value))}
                 style={{ width: 120, height: 4, accentColor: '#31a8ff' }}
               />
-              <select 
-                value={zoom} 
+              <select
+                value={zoom}
                 onChange={e => setZoom(Number(e.target.value))}
                 style={{ width: 60, marginLeft: 8, background: '#444', color: '#fff', border: '1px solid #555', borderRadius: 3 }}
               >
@@ -479,10 +529,38 @@ function App() {
         <aside className="ps-toolbar">
           <div className={`ps-tool ${activeTool === 'pipette' ? 'active' : ''}`} onClick={() => setActiveTool('pipette')}><Pipette size={16} /></div>
           <div className={`ps-tool ${activeTool === 'zoom' ? 'active' : ''}`} onClick={() => setActiveTool('zoom')}><ZoomIn size={16} /></div>
+          <div className={`ps-tool ${activeTool === 'hand' ? 'active' : ''}`} onClick={() => setActiveTool('hand')}><Hand size={16} /></div>
         </aside>
 
         {/* Рабочая зона с холстом */}
-        <main className="ps-workspace" ref={workspaceRef}>
+        <main
+          className="ps-workspace"
+          ref={workspaceRef}
+          onMouseDown={(e) => {
+            if (isSpacePressed || activeTool === 'hand') {
+              setIsDraggingHand(true);
+              if (workspaceRef.current) {
+                startPanRef.current = {
+                  x: e.clientX,
+                  y: e.clientY,
+                  scrollLeft: workspaceRef.current.scrollLeft,
+                  scrollTop: workspaceRef.current.scrollTop
+                };
+              }
+            }
+          }}
+          onMouseMove={(e) => {
+            if (isDraggingHand && workspaceRef.current) {
+              const dx = e.clientX - startPanRef.current.x;
+              const dy = e.clientY - startPanRef.current.y;
+              workspaceRef.current.scrollLeft = startPanRef.current.scrollLeft - dx;
+              workspaceRef.current.scrollTop = startPanRef.current.scrollTop - dy;
+            }
+          }}
+          onMouseUp={() => setIsDraggingHand(false)}
+          onMouseLeave={() => setIsDraggingHand(false)}
+          style={{ cursor: isSpacePressed || activeTool === 'hand' ? (isDraggingHand ? 'grabbing' : 'grab') : 'default' }}
+        >
           {/* Вкладки сверху */}
           <div className="ps-doc-tabs">
             <div className="ps-doc-tab active">
@@ -498,7 +576,7 @@ function App() {
                   className="ps-canvas"
                   onClick={handleCanvasClick}
                   style={{
-                    cursor: activeTool === 'pipette' ? 'crosshair' : activeTool === 'zoom' ? (zoomMode === 'in' ? 'zoom-in' : 'zoom-out') : 'default'
+                    cursor: (isSpacePressed || activeTool === 'hand') ? 'inherit' : (activeTool === 'pipette' ? 'crosshair' : activeTool === 'zoom' ? (zoomMode === 'in' ? 'zoom-in' : 'zoom-out') : 'default')
                   }}
                 ></canvas>
               </div>
@@ -603,8 +681,8 @@ function App() {
             className="ps-status-range"
             title="Масштаб отображения"
           />
-          <select 
-            value={zoom} 
+          <select
+            value={zoom}
             onChange={e => setZoom(Number(e.target.value))}
             className="ps-status-select"
             title="Пресеты масштаба"
@@ -632,7 +710,7 @@ function App() {
         </div>
         <div className="ps-status-info">
           {activeTool === 'pipette' ? 'Инструмент: пипетка. Кликните по изображению... | ' :
-           activeTool === 'zoom' ? 'Инструмент: лупа. Кликните для масштабирования... | ' : ''}
+            activeTool === 'zoom' ? 'Инструмент: лупа. Кликните для масштабирования... | ' : ''}
           {meta ? `${meta.width} × ${meta.height} пикс. (${meta.depth})` : 'Документ не загружен'}
         </div>
       </footer>
@@ -662,6 +740,7 @@ function App() {
         onPreview={handleConvPreview}
         onApply={handleConvApply}
         onCancel={handleConvCancel}
+        channelsCount={meta?.channels ?? 4}
       />
     </div>
   );

@@ -26,10 +26,11 @@ export function makeDefaultLevels(): LevelsState {
 export function buildLUT(inBlack: number, inWhite: number, gamma: number): Uint8Array {
   const lut = new Uint8Array(256);
   const range = Math.max(1, inWhite - inBlack);
+  const safeGamma = Math.max(0.01, gamma);
   for (let i = 0; i < 256; i++) {
     let v = (i - inBlack) / range;
     v = Math.max(0, Math.min(1, v));
-    if (gamma !== 1.0) v = Math.pow(v, 1 / gamma);
+    if (safeGamma !== 1.0) v = Math.pow(v, 1 / safeGamma);
     lut[i] = Math.round(v * 255);
   }
   return lut;

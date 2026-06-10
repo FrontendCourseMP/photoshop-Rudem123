@@ -27,7 +27,7 @@ function formatMegapixels(w: number, h: number): string {
 }
 
 function clampDimension(value: number): number {
-  return Math.max(1, Math.min(30000, Math.round(value)));
+  return Math.max(1, Math.min(16000, Math.round(value)));
 }
 
 // ─── Компонент ───────────────────────────────────────────────────────────────
@@ -61,9 +61,11 @@ export default function ResizeDialog({ open, originalImgData, onApply, onCancel 
   // ─── Инициализация при открытии ────────────────────────────────────────
   useEffect(() => {
     if (open && originalImgData) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setWidth(unit === 'pixels' ? srcW : 100);
       setHeight(unit === 'pixels' ? srcH : 100);
       setProcessing(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, originalImgData, srcW, srcH, unit]);
 
@@ -136,21 +138,21 @@ export default function ResizeDialog({ open, originalImgData, onApply, onCancel 
   // ─── Валидация ─────────────────────────────────────────────────────────
   const isValid = (() => {
     if (unit === 'pixels') {
-      return width >= 1 && width <= 30000 && height >= 1 && height <= 30000;
+      return width >= 1 && width <= 16000 && height >= 1 && height <= 16000;
     }
     return width > 0 && width <= 10000 && height > 0 && height <= 10000;
   })();
 
   const widthError = (() => {
     if (width <= 0) return 'Значение должно быть > 0';
-    if (unit === 'pixels' && width > 30000) return 'Макс. 30 000 пикс.';
+    if (unit === 'pixels' && width > 16000) return 'Макс. 16 000 пикс.';
     if (unit === 'percent' && width > 10000) return 'Макс. 10 000%';
     return '';
   })();
 
   const heightError = (() => {
     if (height <= 0) return 'Значение должно быть > 0';
-    if (unit === 'pixels' && height > 30000) return 'Макс. 30 000 пикс.';
+    if (unit === 'pixels' && height > 16000) return 'Макс. 16 000 пикс.';
     if (unit === 'percent' && height > 10000) return 'Макс. 10 000%';
     return '';
   })();
@@ -202,7 +204,7 @@ export default function ResizeDialog({ open, originalImgData, onApply, onCancel 
               className={`rs-input ${widthError ? 'rs-input-error' : ''}`}
               value={width || ''}
               min={unit === 'pixels' ? 1 : 0.01}
-              max={unit === 'pixels' ? 30000 : 10000}
+              max={unit === 'pixels' ? 16000 : 10000}
               step={unit === 'pixels' ? 1 : 0.1}
               onChange={e => handleWidthChange(e.target.value)}
             />
@@ -245,7 +247,7 @@ export default function ResizeDialog({ open, originalImgData, onApply, onCancel 
               className={`rs-input ${heightError ? 'rs-input-error' : ''}`}
               value={height || ''}
               min={unit === 'pixels' ? 1 : 0.01}
-              max={unit === 'pixels' ? 30000 : 10000}
+              max={unit === 'pixels' ? 16000 : 10000}
               step={unit === 'pixels' ? 1 : 0.1}
               onChange={e => handleHeightChange(e.target.value)}
             />

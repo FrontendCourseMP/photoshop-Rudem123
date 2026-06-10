@@ -83,14 +83,14 @@ function LevelsSlider({ ch, onChange }: SliderProps) {
 
     const move = (e: MouseEvent) => {
       if (!activeDrag) return;
-      
+
       // Троттлинг: обновляем состояние не чаще чем раз в ~30 мс (около 30 кадров в сек)
       // чтобы не заваливать React обновлениями и не вешать браузер (ошибка "Страница не отвечает")
       const now = performance.now();
       if (now - lastMoveTime < 32) return;
       lastMoveTime = now;
 
-      const { inBlack: b, inWhite: w, gammaDisplayVal: gdv, onChange: cb } = propsRef.current;
+      const { inBlack: b, inWhite: w, onChange: cb } = propsRef.current;
       const val = valFromMouse(e.clientX);
       if (activeDrag === 'black') {
         const nb = Math.min(val, w - 2);
@@ -170,14 +170,14 @@ interface Props {
 
 export default function LevelsDialog({ open, originalImgData, isGB7 = false, onPreview, onApply, onCancel }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const histRef   = useRef<HTMLCanvasElement>(null);
-  const rafRef    = useRef<number | null>(null);
+  const histRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number | null>(null);
   const previewBufferRef = useRef<ImageData | null>(null);
 
   const [activeChannel, setActiveChannel] = useState<LevelsChannel>('master');
-  const [levels, setLevels]   = useState<LevelsState>(makeDefaultLevels);
+  const [levels, setLevels] = useState<LevelsState>(makeDefaultLevels);
   const [logScale, setLogScale] = useState(false);
-  const [preview, setPreview]   = useState(true);
+  const [preview, setPreview] = useState(true);
 
   // Сбрасываем буфер превью, если изменилась исходная картинка
   useEffect(() => {
@@ -287,7 +287,7 @@ export default function LevelsDialog({ open, originalImgData, isGB7 = false, onP
         <div className="lv-btn-group">
           <button className="lv-btn lv-btn-secondary" onClick={handleReset}>Сброс</button>
           <button className="lv-btn lv-btn-secondary" onClick={handleCancel}>Отмена</button>
-          <button className="lv-btn lv-btn-primary"   onClick={handleApply}>Применить</button>
+          <button className="lv-btn lv-btn-primary" onClick={handleApply}>Применить</button>
         </div>
       </div>
     </dialog>

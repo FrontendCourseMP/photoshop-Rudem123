@@ -61,6 +61,7 @@ export function applyConvolution(
   applyTo: { r: boolean; g: boolean; b: boolean; a?: boolean },
   edge: EdgeStrategy,
   offset: number = 0,
+  signal?: AbortSignal
 ): Promise<ImageData> {
   return new Promise((resolve) => {
     const { width: w, height: h, data: sd } = src;
@@ -110,6 +111,11 @@ export function applyConvolution(
     const CHUNK_SIZE = 40;
 
     function processChunk() {
+      if (signal?.aborted) {
+        resolve(dst);
+        return;
+      }
+
       const endY = Math.min(y + CHUNK_SIZE, h);
 
       for (; y < endY; y++) {
@@ -129,7 +135,6 @@ export function applyConvolution(
             const val = sum / divisor + offset;
             dd[dstIdx + ch] = Math.max(0, Math.min(255, Math.round(val)));
           }
-          // Альфа-канал всегда копируется без изменений (уже есть в dst, т.к. создали из sd)
         }
       }
 

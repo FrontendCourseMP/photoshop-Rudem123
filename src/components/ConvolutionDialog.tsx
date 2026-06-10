@@ -12,6 +12,7 @@ interface ConvolutionDialogProps {
   onPreview: (data: ImageData | null) => void;
   onApply: (data: ImageData) => void;
   onCancel: () => void;
+  channelsCount: number;
 }
 
 const EDGE_OPTIONS: { value: EdgeStrategy; label: string }[] = [
@@ -26,6 +27,7 @@ export default function ConvolutionDialog({
   onPreview,
   onApply,
   onCancel,
+  channelsCount,
 }: ConvolutionDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -48,6 +50,7 @@ export default function ConvolutionDialog({
   // Сброс при открытии
   useEffect(() => {
     if (open) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setKernel([...KERNEL_PRESETS[0].values]);
       setOffset(KERNEL_PRESETS[0].offset || 0);
       setPresetIdx(0);
@@ -55,18 +58,28 @@ export default function ConvolutionDialog({
       setProcessing(false);
       setApplyChannels({ r: true, g: true, b: true, a: false });
       setEdge('copy');
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open]);
 
   // Превью при изменении параметров
   useEffect(() => {
     if (!preview || !originalImgData || !open) return;
-    let isActive = true;
-    applyConvolution(originalImgData, kernel, applyChannels, edge, offset).then(result => {
-      if (isActive) onPreview(result);
-    });
-    return () => { isActive = false; };
-  }, [preview, kernel, offset, applyChannels, edge, originalImgData, open, onPreview]);
+
+    const abortController = new AbortController();
+
+    // Подготавливаем каналы для алгоритма.
+    // Если картинка серая (channelsCount <= 2), отправляем r,g,b = applyChannels.r (чекбокс "Серый" маппится на 'r')
+    const actualChannels = channelsCount <= 2
+      ? { r: applyChannels.r, g: applyChannels.r, b: applyChannels.r, a: applyChannels.a }
+      : applyChannels;
+
+    applyConvolution(originalImgData, kernel, actualChannels, edge, offset, abortController.signal).then(result => {
+      if (!abortController.signal.aborted) onPreview(result);
+    }).catch(() => { /* Игнорируем прерванные промисы */ });
+
+    return () => abortController.abort();
+  }, [preview, kernel, offset, applyChannels, edge, originalImgData, open, channelsCount, onPreview]);
 
   const handlePresetChange = useCallback((idx: number) => {
     setPresetIdx(idx);
@@ -98,11 +111,15 @@ export default function ConvolutionDialog({
   const handleApply = useCallback(() => {
     if (!originalImgData) return;
     setProcessing(true);
-    applyConvolution(originalImgData, kernel, applyChannels, edge, offset).then(result => {
+    const actualChannels = channelsCount <= 2
+      ? { r: applyChannels.r, g: applyChannels.r, b: applyChannels.r, a: applyChannels.a }
+      : applyChannels;
+
+    applyConvolution(originalImgData, kernel, actualChannels, edge, offset).then(result => {
       onApply(result);
       setProcessing(false);
     });
-  }, [originalImgData, kernel, offset, applyChannels, edge, onApply]);
+  }, [originalImgData, kernel, offset, applyChannels, edge, channelsCount, onApply]);
 
   const handleClose = useCallback(() => {
     if (preview) onPreview(null);
@@ -167,22 +184,34 @@ export default function ConvolutionDialog({
         <div className="cv-field-row">
           <label className="cv-label">Каналы:</label>
           <div className="cv-channels">
-            <label className="cv-ch-label">
-              <input type="checkbox" checked={applyChannels.r} onChange={() => handleChannelToggle('r')} />
-              <span className="cv-ch-r">R</span>
-            </label>
-            <label className="cv-ch-label">
-              <input type="checkbox" checked={applyChannels.g} onChange={() => handleChannelToggle('g')} />
-              <span className="cv-ch-g">G</span>
-            </label>
-            <label className="cv-ch-label">
-              <input type="checkbox" checked={applyChannels.b} onChange={() => handleChannelToggle('b')} />
-              <span className="cv-ch-b">B</span>
-            </label>
-            <label className="cv-ch-label">
-              <input type="checkbox" checked={applyChannels.a} onChange={() => handleChannelToggle('a')} />
-              <span className="cv-ch-a" style={{ color: '#aaa' }}>A</span>
-            </label>
+            {channelsCount <= 2 ? (
+              <label className="cv-ch-label" style={{ marginRight: 8 }}>
+                <input type="checkbox" checked={applyChannels.r} onChange={() => handleChannelToggle('r')} />
+                <span className="cv-ch-r" style={{ color: '#ccc' }}>Серый</span>
+              </label>
+            ) : (
+              <>
+                <label className="cv-ch-label">
+                  <input type="checkbox" checked={applyChannels.r} onChange={() => handleChannelToggle('r')} />
+                  <span className="cv-ch-r">R</span>
+                </label>
+                <label className="cv-ch-label">
+                  <input type="checkbox" checked={applyChannels.g} onChange={() => handleChannelToggle('g')} />
+                  <span className="cv-ch-g">G</span>
+                </label>
+                <label className="cv-ch-label">
+                  <input type="checkbox" checked={applyChannels.b} onChange={() => handleChannelToggle('b')} />
+                  <span className="cv-ch-b">B</span>
+                </label>
+              </>
+            )}
+
+            {(channelsCount === 2 || channelsCount === 4) && (
+              <label className="cv-ch-label">
+                <input type="checkbox" checked={applyChannels.a} onChange={() => handleChannelToggle('a')} />
+                <span className="cv-ch-a" style={{ color: '#aaa' }}>A</span>
+              </label>
+            )}
           </div>
         </div>
 
