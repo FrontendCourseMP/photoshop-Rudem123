@@ -533,34 +533,7 @@ function App() {
         </aside>
 
         {/* Рабочая зона с холстом */}
-        <main
-          className="ps-workspace"
-          ref={workspaceRef}
-          onMouseDown={(e) => {
-            if (isSpacePressed || activeTool === 'hand') {
-              setIsDraggingHand(true);
-              if (workspaceRef.current) {
-                startPanRef.current = {
-                  x: e.clientX,
-                  y: e.clientY,
-                  scrollLeft: workspaceRef.current.scrollLeft,
-                  scrollTop: workspaceRef.current.scrollTop
-                };
-              }
-            }
-          }}
-          onMouseMove={(e) => {
-            if (isDraggingHand && workspaceRef.current) {
-              const dx = e.clientX - startPanRef.current.x;
-              const dy = e.clientY - startPanRef.current.y;
-              workspaceRef.current.scrollLeft = startPanRef.current.scrollLeft - dx;
-              workspaceRef.current.scrollTop = startPanRef.current.scrollTop - dy;
-            }
-          }}
-          onMouseUp={() => setIsDraggingHand(false)}
-          onMouseLeave={() => setIsDraggingHand(false)}
-          style={{ cursor: isSpacePressed || activeTool === 'hand' ? (isDraggingHand ? 'grabbing' : 'grab') : 'default' }}
-        >
+        <main className="ps-workspace">
           {/* Вкладки сверху */}
           <div className="ps-doc-tabs">
             <div className="ps-doc-tab active">
@@ -568,7 +541,34 @@ function App() {
             </div>
           </div>
 
-          <div className="ps-canvas-area">
+          <div 
+            className="ps-canvas-area"
+            ref={workspaceRef}
+            onMouseDown={(e) => {
+              if (isSpacePressed || activeTool === 'hand') {
+                setIsDraggingHand(true);
+                if (workspaceRef.current) {
+                  startPanRef.current = {
+                    x: e.clientX,
+                    y: e.clientY,
+                    scrollLeft: workspaceRef.current.scrollLeft,
+                    scrollTop: workspaceRef.current.scrollTop
+                  };
+                }
+              }
+            }}
+            onMouseMove={(e) => {
+              if (isDraggingHand && workspaceRef.current) {
+                const dx = e.clientX - startPanRef.current.x;
+                const dy = e.clientY - startPanRef.current.y;
+                workspaceRef.current.scrollLeft = startPanRef.current.scrollLeft - dx;
+                workspaceRef.current.scrollTop = startPanRef.current.scrollTop - dy;
+              }
+            }}
+            onMouseUp={() => setIsDraggingHand(false)}
+            onMouseLeave={() => setIsDraggingHand(false)}
+            style={{ cursor: isSpacePressed || activeTool === 'hand' ? (isDraggingHand ? 'grabbing' : 'grab') : 'default' }}
+          >
             {meta ? (
               <div className="ps-canvas-scroll">
                 <canvas
