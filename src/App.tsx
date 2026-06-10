@@ -3,7 +3,7 @@ import { decodeGB7, encodeGB7, getGB7Depth } from './utils/gb7';
 import { getImageDepth } from './utils/metadata';
 import { type InterpolationMethod, resizeImageData, INTERPOLATION_METHODS, INTERPOLATION_KEYS } from './utils/interpolation';
 import {
-  Pipette, ZoomIn, ZoomOut, Download
+  Pipette, ZoomIn, ZoomOut, Download, Eye, EyeOff
 } from 'lucide-react';
 import LevelsDialog from './components/LevelsDialog';
 import ResizeDialog from './components/ResizeDialog';
@@ -138,7 +138,8 @@ function App() {
     if (!originalImgData || !meta) return;
 
     let downloadUrl = '';
-    let outFilename = filename.split('.')[0] + `_export.${format.split('-')[0]}`;
+    const baseName = filename.replace(/\.[^/.]+$/, "");
+    let outFilename = `${baseName}.${format}`;
 
     if (format === 'png' || format === 'jpeg') {
       // Рисуем оригинальные данные на временный offscreen canvas для чистого экспорта
@@ -161,7 +162,7 @@ function App() {
       const useMask = format === 'gb7-mask';
       const blob = encodeGB7(originalImgData, useMask);
       downloadUrl = URL.createObjectURL(blob);
-      outFilename = useMask ? `${filename.split('.')[0]}_mask.gb7` : `${filename.split('.')[0]}_nomask.gb7`;
+      outFilename = `${baseName}.gb7`;
     }
 
     const link = document.createElement('a');
@@ -310,9 +311,9 @@ function App() {
 
       if (x >= 0 && x < originalImgData.width && y >= 0 && y < originalImgData.height) {
         const i = (y * originalImgData.width + x) * 4;
-        const r = originalImgData.data[i];
-        const g = originalImgData.data[i + 1];
-        const b = originalImgData.data[i + 2];
+        const r = channels.r ? originalImgData.data[i] : 0;
+        const g = channels.g ? originalImgData.data[i + 1] : 0;
+        const b = channels.b ? originalImgData.data[i + 2] : 0;
         const lab = rgbToLab(r, g, b);
         setPickedColor({ x, y, r, g, b, lab });
       }
@@ -362,8 +363,9 @@ function App() {
       depth: prev?.depth ?? '32 бит (RGBA)', 
       channels: prev?.channels ?? 4 
     }));
+    setZoom(computeAutoFitZoom(data.width, data.height));
     setResizeOpen(false);
-  }, []);
+  }, [computeAutoFitZoom, setOriginalImgData]);
 
   // ─── Callbacks для ConvolutionDialog ───────────────────────────────────────
   const handleConvPreview = useCallback((data: ImageData | null) => {
@@ -410,7 +412,7 @@ function App() {
             <div className="ps-opt-divider"></div>
             <div style={{ width: 16, height: 16, backgroundColor: `rgb(${pickedColor.r},${pickedColor.g},${pickedColor.b})`, border: '1px solid #777' }}></div>
             <div className="ps-opt-item"><span>RGB:</span> <input type="text" style={{ width: 90 }} value={`${pickedColor.r}, ${pickedColor.g}, ${pickedColor.b}`} readOnly /></div>
-            <div className="ps-opt-item"><span>LAB:</span> <input type="text" style={{ width: 130 }} value={`${pickedColor.lab.l.toFixed(1)}, ${pickedColor.lab.a.toFixed(1)}, ${pickedColor.lab.b.toFixed(1)}`} readOnly /></div>
+            <div className="ps-opt-item"><span>LAB:</span> <input type="text" style={{ width: 130 }} value={`${pickedColor.lab.l.toFixed(2)}, ${pickedColor.lab.a.toFixed(2)}, ${pickedColor.lab.b.toFixed(2)}`} readOnly /></div>
           </>
         ) : activeTool === 'zoom' ? (
           <>
@@ -443,7 +445,19 @@ function App() {
                 onChange={(e) => setZoom(Number(e.target.value))}
                 style={{ width: 120, height: 4, accentColor: '#31a8ff' }}
               />
-              <span style={{ width: 45, textAlign: 'right', display: 'inline-block' }}>{zoom}%</span>
+              <select 
+                value={zoom} 
+                onChange={e => setZoom(Number(e.target.value))}
+                style={{ width: 60, marginLeft: 8, background: '#444', color: '#fff', border: '1px solid #555', borderRadius: 3 }}
+              >
+                {![12, 25, 50, 100, 200, 300].includes(zoom) && <option value={zoom}>{zoom}%</option>}
+                <option value={12}>12%</option>
+                <option value={25}>25%</option>
+                <option value={50}>50%</option>
+                <option value={100}>100%</option>
+                <option value={200}>200%</option>
+                <option value={300}>300%</option>
+              </select>
             </div>
             <div className="ps-opt-divider"></div>
             <button className="ps-btn-opt" onClick={() => setZoom(100)}>100%</button>
@@ -526,6 +540,9 @@ function App() {
                 <div className="ps-channels-list">
                   {meta && (meta.channels === 1 || meta.channels === 2) && (
                     <div className={`ps-channel-item ${!channels.r ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, r: !c.r }))}>
+                      <div className="ps-channel-eye" style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
+                        {channels.r ? <Eye size={16} color="#ccc" /> : <EyeOff size={16} color="#666" />}
+                      </div>
                       <canvas ref={rCanvasRef} className="ps-channel-thumb"></canvas>
                       <span className="ps-channel-name">Серый (Gray)</span>
                     </div>
@@ -533,14 +550,23 @@ function App() {
                   {meta && (meta.channels === 3 || meta.channels === 4) && (
                     <>
                       <div className={`ps-channel-item ${!channels.r ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, r: !c.r }))}>
+                        <div className="ps-channel-eye" style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
+                          {channels.r ? <Eye size={16} color="#ccc" /> : <EyeOff size={16} color="#666" />}
+                        </div>
                         <canvas ref={rCanvasRef} className="ps-channel-thumb"></canvas>
                         <span className="ps-channel-name">Красный (R)</span>
                       </div>
                       <div className={`ps-channel-item ${!channels.g ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, g: !c.g }))}>
+                        <div className="ps-channel-eye" style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
+                          {channels.g ? <Eye size={16} color="#ccc" /> : <EyeOff size={16} color="#666" />}
+                        </div>
                         <canvas ref={gCanvasRef} className="ps-channel-thumb"></canvas>
                         <span className="ps-channel-name">Зеленый (G)</span>
                       </div>
                       <div className={`ps-channel-item ${!channels.b ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, b: !c.b }))}>
+                        <div className="ps-channel-eye" style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
+                          {channels.b ? <Eye size={16} color="#ccc" /> : <EyeOff size={16} color="#666" />}
+                        </div>
                         <canvas ref={bCanvasRef} className="ps-channel-thumb"></canvas>
                         <span className="ps-channel-name">Синий (B)</span>
                       </div>
@@ -548,6 +574,9 @@ function App() {
                   )}
                   {meta && (meta.channels === 2 || meta.channels === 4) && (
                     <div className={`ps-channel-item ${!channels.a ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, a: !c.a }))}>
+                      <div className="ps-channel-eye" style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
+                        {channels.a ? <Eye size={16} color="#ccc" /> : <EyeOff size={16} color="#666" />}
+                      </div>
                       <canvas ref={aCanvasRef} className="ps-channel-thumb"></canvas>
                       <span className="ps-channel-name">Альфа (A)</span>
                     </div>
@@ -574,7 +603,20 @@ function App() {
             className="ps-status-range"
             title="Масштаб отображения"
           />
-          <span className="ps-status-zoom-val">{zoom}%</span>
+          <select 
+            value={zoom} 
+            onChange={e => setZoom(Number(e.target.value))}
+            className="ps-status-select"
+            title="Пресеты масштаба"
+          >
+            {![12, 25, 50, 100, 200, 300].includes(zoom) && <option value={zoom}>{zoom}%</option>}
+            <option value={12}>12%</option>
+            <option value={25}>25%</option>
+            <option value={50}>50%</option>
+            <option value={100}>100%</option>
+            <option value={200}>200%</option>
+            <option value={300}>300%</option>
+          </select>
         </div>
         <div className="ps-status-interp">
           <select
@@ -589,6 +631,8 @@ function App() {
           </select>
         </div>
         <div className="ps-status-info">
+          {activeTool === 'pipette' ? 'Инструмент: пипетка. Кликните по изображению... | ' :
+           activeTool === 'zoom' ? 'Инструмент: лупа. Кликните для масштабирования... | ' : ''}
           {meta ? `${meta.width} × ${meta.height} пикс. (${meta.depth})` : 'Документ не загружен'}
         </div>
       </footer>
@@ -597,6 +641,7 @@ function App() {
       <LevelsDialog
         open={levelsOpen}
         originalImgData={originalImgData}
+        isGB7={meta?.depth.includes('7 бит') || meta?.depth.includes('8 бит (7 Gray')}
         onPreview={handleLevelsPreview}
         onApply={handleLevelsApply}
         onCancel={handleLevelsCancel}

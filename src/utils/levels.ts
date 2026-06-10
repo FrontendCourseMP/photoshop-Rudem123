@@ -74,7 +74,7 @@ export function computeHistogram(imgData: ImageData, channel: LevelsChannel): nu
   for (let i = 0; i < d.length; i += 4) {
     let v: number;
     switch (channel) {
-      case 'master': v = Math.round(0.2126 * d[i] + 0.7152 * d[i+1] + 0.0722 * d[i+2]); break;
+      case 'master': v = Math.round(0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]); break;
       case 'r': v = d[i]; break;
       case 'g': v = d[i+1]; break;
       case 'b': v = d[i+2]; break;
@@ -87,12 +87,12 @@ export function computeHistogram(imgData: ImageData, channel: LevelsChannel): nu
 
 /** Вычисляем позицию маркера гаммы в пространстве 0–255 */
 export function gammaToDisplayVal(inBlack: number, inWhite: number, gamma: number): number {
-  return inBlack + Math.pow(0.5, 1 / gamma) * (inWhite - inBlack);
+  return inBlack + Math.pow(0.5, gamma) * (inWhite - inBlack);
 }
 
 /** Вычисляем гамму из позиции маркера */
 export function displayValToGamma(inBlack: number, inWhite: number, displayVal: number): number {
   const range = Math.max(1, inWhite - inBlack);
   const ratio = Math.max(0.0001, Math.min(0.9999, (displayVal - inBlack) / range));
-  return Math.max(0.1, Math.min(9.99, Math.log(0.5) / Math.log(ratio)));
+  return Math.max(0.1, Math.min(9.99, Math.log(ratio) / Math.log(0.5)));
 }

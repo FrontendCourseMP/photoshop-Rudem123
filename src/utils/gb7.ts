@@ -35,6 +35,9 @@ export function decodeGB7(buffer: ArrayBuffer): ImageData {
     if (version !== VERSION) console.warn("Неизвестная версия формата");
 
     const flag = bytes[5];
+    if ((flag >> 1) !== 0) {
+        throw new Error("Некорректный GB7: неиспользуемые биты флага должны быть равны 0");
+    }
     const hasMask = (flag & 1) === 1;
 
     // Big-Endian чтение ширины и высоты (2 байта DataView нужны только здесь, для заголовка)
@@ -45,29 +48,16 @@ export function decodeGB7(buffer: ArrayBuffer): ImageData {
         throw new Error("Некорректные размеры изображения");
     }
 
-    // Авто-определение stride (шага строки с учётом выравнивания)
-    let stride = width;
-    let foundExact = false;
-
-    for (const align of [4, 8, 16, 32, 64, 128]) {
-        const testStride = Math.ceil(width / align) * align;
-        if (12 + testStride * height === buffer.byteLength) {
-            stride = testStride;
-            foundExact = true;
-            break;
-        }
+    if (bytes[10] !== 0x00 || bytes[11] !== 0x00) {
+        throw new Error("Некорректный GB7: reserved-байты должны быть равны 0");
     }
 
-    if (!foundExact && buffer.byteLength > 12 + width * height) {
-        const testStride = Math.ceil(width / 4) * 4;
-        if (12 + testStride * height <= buffer.byteLength) {
-            stride = testStride;
-        }
+    const expectedSize = 12 + width * height;
+    if (buffer.byteLength !== expectedSize) {
+        throw new Error(`Некорректный GB7: размер файла не совпадает с заявленным`);
     }
 
-    if (buffer.byteLength < 12 + stride * height) {
-        throw new Error(`Файл повреждён: ожидается ${12 + stride * height} байт, получено ${buffer.byteLength}`);
-    }
+    const stride = width;
 
     const imageData = new ImageData(width, height);
     // Uint32Array view поверх того же буфера — запись 4 байт (RGBA) за 1 операцию
@@ -162,8 +152,8 @@ export function encodeGB7(imageData: ImageData, useMask: boolean): Blob {
 
 export function getGB7Depth(buffer: ArrayBuffer): { depth: string, channels: number } {
     const bytes = new Uint8Array(buffer);
-    if (buffer.byteLength < 6) return { depth: '7 бит', channels: 1 };
+    if (buffer.byteLength < 6) return { depth: '7 бит (Gray)', channels: 1 };
     const flag = bytes[5];
     const hasMask = (flag & 1) === 1;
-    return hasMask ? { depth: '8 бит', channels: 2 } : { depth: '7 бит', channels: 1 };
+    return hasMask ? { depth: '8 бит (7 Gray + 1 mask)', channels: 2 } : { depth: '7 бит (Gray)', channels: 1 };
 }

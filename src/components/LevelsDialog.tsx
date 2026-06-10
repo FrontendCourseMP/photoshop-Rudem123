@@ -14,7 +14,8 @@ function drawHist(
   canvas: HTMLCanvasElement,
   counts: number[],
   logScale: boolean,
-  channel: LevelsChannel
+  channel: LevelsChannel,
+  isGB7: boolean
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -23,21 +24,30 @@ function drawHist(
   ctx.fillStyle = '#1c1c1c';
   ctx.fillRect(0, 0, w, h);
 
-  const maxRaw = Math.max(...counts);
+  let displayCounts = counts;
+  if (isGB7) {
+    displayCounts = new Array(128).fill(0);
+    for (let i = 0; i < 256; i++) {
+      displayCounts[Math.floor(i / 2)] += counts[i];
+    }
+  }
+
+  const maxRaw = Math.max(...displayCounts);
   if (maxRaw === 0) return;
   const toHeight = (v: number) => logScale
     ? (Math.log1p(v) / Math.log1p(maxRaw)) * h
     : (v / maxRaw) * h;
 
-  const bw = w / 256;
+  const numBins = displayCounts.length;
+  const bw = w / numBins;
   ctx.fillStyle = HIST_COLORS[channel];
-  for (let i = 0; i < 256; i++) {
-    const bh = toHeight(counts[i]);
+  for (let i = 0; i < numBins; i++) {
+    const bh = toHeight(displayCounts[i]);
     ctx.fillRect(i * bw, h - bh, Math.max(1, bw), bh);
   }
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 1;
-  [64, 128, 192].forEach(x => {
+  [numBins / 4, numBins / 2, (numBins * 3) / 4].forEach(x => {
     ctx.beginPath(); ctx.moveTo(x * bw, 0); ctx.lineTo(x * bw, h); ctx.stroke();
   });
 }
@@ -152,12 +162,13 @@ const CHANNEL_LABELS: Record<LevelsChannel, string> = {
 interface Props {
   open: boolean;
   originalImgData: ImageData | null;
+  isGB7?: boolean;
   onPreview: (data: ImageData | null) => void;
   onApply: (data: ImageData) => void;
   onCancel: () => void;
 }
 
-export default function LevelsDialog({ open, originalImgData, onPreview, onApply, onCancel }: Props) {
+export default function LevelsDialog({ open, originalImgData, isGB7 = false, onPreview, onApply, onCancel }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const histRef   = useRef<HTMLCanvasElement>(null);
   const rafRef    = useRef<number | null>(null);
@@ -189,8 +200,8 @@ export default function LevelsDialog({ open, originalImgData, onPreview, onApply
   useEffect(() => {
     if (!open || !originalImgData || !histRef.current) return;
     const counts = computeHistogram(originalImgData, activeChannel);
-    drawHist(histRef.current, counts, logScale, activeChannel);
-  }, [open, originalImgData, activeChannel, logScale]);
+    drawHist(histRef.current, counts, logScale, activeChannel, isGB7);
+  }, [open, originalImgData, activeChannel, logScale, isGB7]);
 
   // Предпросмотр (через rAF — не перегружаем и переиспользуем буфер памяти)
   useEffect(() => {

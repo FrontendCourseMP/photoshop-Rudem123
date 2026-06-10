@@ -13,11 +13,12 @@ export function getImageDepth(buffer: ArrayBuffer, type: string): { depth: strin
         // SOF0 или SOF2
         const precision = bytes[offset + 4];
         const components = bytes[offset + 9];
-        return { depth: `${precision * components} бит`, channels: components };
+        const formatLabel = components === 1 ? ' (Gray)' : components === 3 ? ' (RGB)' : components === 4 ? ' (CMYK)' : '';
+        return { depth: `${precision * components} бит${formatLabel}`, channels: components };
       }
       offset += 2 + view.getUint16(offset + 2);
     }
-    return { depth: '24 бит', channels: 3 }; // Fallback для JPEG
+    return { depth: '24 бит (RGB)', channels: 3 }; // Fallback для JPEG
   }
 
   if (type === 'image/png') {
@@ -54,10 +55,16 @@ export function getImageDepth(buffer: ArrayBuffer, type: string): { depth: strin
         case 6: multiplier = 4; channels = 4; break; // Truecolor + Alpha
       }
       const label = colorType === 3 ? ' (Индекс.)' : '';
-      return { depth: `${bitDepth * multiplier} бит${label}`, channels };
+      let formatLabel = '';
+      if (channels === 1) formatLabel = ' (Gray)';
+      else if (channels === 2) formatLabel = ' (Gray + Alpha)';
+      else if (channels === 3) formatLabel = ' (RGB)';
+      else if (channels === 4) formatLabel = ' (RGBA)';
+      
+      return { depth: `${bitDepth * multiplier} бит${label}${formatLabel}`, channels };
     }
-    return { depth: '32 бит', channels: 4 }; // Fallback
+    return { depth: '32 бит (RGBA)', channels: 4 }; // Fallback
   }
 
-  return { depth: '32 бит', channels: 4 }; // Для неизвестных
+  return { depth: '32 бит (RGBA)', channels: 4 }; // Для неизвестных
 }

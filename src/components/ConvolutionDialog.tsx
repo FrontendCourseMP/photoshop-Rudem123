@@ -30,9 +30,10 @@ export default function ConvolutionDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const [kernel, setKernel] = useState<number[]>([0, 0, 0, 0, 1, 0, 0, 0, 0]);
+  const [offset, setOffset] = useState<number>(0);
   const [presetIdx, setPresetIdx] = useState(0);
   const [edge, setEdge] = useState<EdgeStrategy>('copy');
-  const [applyChannels, setApplyChannels] = useState({ r: true, g: true, b: true });
+  const [applyChannels, setApplyChannels] = useState({ r: true, g: true, b: true, a: false });
   const [preview, setPreview] = useState(false);
   const [processing, setProcessing] = useState(false);
 
@@ -48,10 +49,11 @@ export default function ConvolutionDialog({
   useEffect(() => {
     if (open) {
       setKernel([...KERNEL_PRESETS[0].values]);
+      setOffset(KERNEL_PRESETS[0].offset || 0);
       setPresetIdx(0);
       setPreview(false);
       setProcessing(false);
-      setApplyChannels({ r: true, g: true, b: true });
+      setApplyChannels({ r: true, g: true, b: true, a: false });
       setEdge('copy');
     }
   }, [open]);
@@ -60,15 +62,16 @@ export default function ConvolutionDialog({
   useEffect(() => {
     if (!preview || !originalImgData || !open) return;
     let isActive = true;
-    applyConvolution(originalImgData, kernel, applyChannels, edge).then(result => {
+    applyConvolution(originalImgData, kernel, applyChannels, edge, offset).then(result => {
       if (isActive) onPreview(result);
     });
     return () => { isActive = false; };
-  }, [preview, kernel, applyChannels, edge, originalImgData, open, onPreview]);
+  }, [preview, kernel, offset, applyChannels, edge, originalImgData, open, onPreview]);
 
   const handlePresetChange = useCallback((idx: number) => {
     setPresetIdx(idx);
     setKernel([...KERNEL_PRESETS[idx].values]);
+    setOffset(KERNEL_PRESETS[idx].offset || 0);
   }, []);
 
   const handleKernelChange = useCallback((idx: number, raw: string) => {
@@ -81,25 +84,25 @@ export default function ConvolutionDialog({
     setPresetIdx(-1); // Пользовательские значения — сбрасываем пресет
   }, []);
 
-  const handleChannelToggle = useCallback((ch: 'r' | 'g' | 'b') => {
-    setApplyChannels(prev => ({ ...prev, [ch]: !prev[ch] }));
+  const handleChannelToggle = useCallback((ch: 'r' | 'g' | 'b' | 'a') => {
+    setApplyChannels(prev => ({ ...prev, [ch]: !prev[ch as keyof typeof prev] }));
   }, []);
 
   const handleReset = useCallback(() => {
     handlePresetChange(0);
     setEdge('copy');
-    setApplyChannels({ r: true, g: true, b: true });
+    setApplyChannels({ r: true, g: true, b: true, a: false });
     if (preview) onPreview(null);
   }, [handlePresetChange, preview, onPreview]);
 
   const handleApply = useCallback(() => {
     if (!originalImgData) return;
     setProcessing(true);
-    applyConvolution(originalImgData, kernel, applyChannels, edge).then(result => {
+    applyConvolution(originalImgData, kernel, applyChannels, edge, offset).then(result => {
       onApply(result);
       setProcessing(false);
     });
-  }, [originalImgData, kernel, applyChannels, edge, onApply]);
+  }, [originalImgData, kernel, offset, applyChannels, edge, onApply]);
 
   const handleClose = useCallback(() => {
     if (preview) onPreview(null);
@@ -145,6 +148,19 @@ export default function ConvolutionDialog({
           ))}
         </div>
 
+        <div className="cv-field-row" style={{ marginTop: 8 }}>
+          <label className="cv-label">Смещение:</label>
+          <input
+            type="number"
+            value={offset}
+            onChange={e => {
+              setOffset(Number(e.target.value));
+              setPresetIdx(-1);
+            }}
+            style={{ width: 80, padding: '4px 8px', background: '#505050', color: '#e0e0e0', border: '1px solid #333', borderRadius: 3, outline: 'none' }}
+          />
+        </div>
+
         <div className="cv-separator" />
 
         {/* Каналы */}
@@ -162,6 +178,10 @@ export default function ConvolutionDialog({
             <label className="cv-ch-label">
               <input type="checkbox" checked={applyChannels.b} onChange={() => handleChannelToggle('b')} />
               <span className="cv-ch-b">B</span>
+            </label>
+            <label className="cv-ch-label">
+              <input type="checkbox" checked={applyChannels.a} onChange={() => handleChannelToggle('a')} />
+              <span className="cv-ch-a" style={{ color: '#aaa' }}>A</span>
             </label>
           </div>
         </div>

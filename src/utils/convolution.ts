@@ -10,6 +10,7 @@ export type EdgeStrategy = 'black' | 'white' | 'copy';
 export interface KernelPreset {
   name: string;
   values: number[]; // 9 элементов (row-major 3×3)
+  offset?: number;
 }
 
 // ─── Пресеты ядер ────────────────────────────────────────────────────────────
@@ -34,10 +35,12 @@ export const KERNEL_PRESETS: KernelPreset[] = [
   {
     name: 'Оператор Прюитта (горизонтальный)',
     values: [-1, 0, 1, -1, 0, 1, -1, 0, 1],
+    offset: 128,
   },
   {
     name: 'Оператор Прюитта (вертикальный)',
     values: [-1, -1, -1, 0, 0, 0, 1, 1, 1],
+    offset: 128,
   },
 ];
 
@@ -55,8 +58,9 @@ export const KERNEL_PRESETS: KernelPreset[] = [
 export function applyConvolution(
   src: ImageData,
   kernel: number[],
-  applyTo: { r: boolean; g: boolean; b: boolean },
+  applyTo: { r: boolean; g: boolean; b: boolean; a?: boolean },
   edge: EdgeStrategy,
+  offset: number = 0,
 ): Promise<ImageData> {
   return new Promise((resolve) => {
     const { width: w, height: h, data: sd } = src;
@@ -73,6 +77,7 @@ export function applyConvolution(
     if (applyTo.r) channelIndices.push(0);
     if (applyTo.g) channelIndices.push(1);
     if (applyTo.b) channelIndices.push(2);
+    if (applyTo.a) channelIndices.push(3);
 
     // Если ни один канал не выбран — возвращаем копию
     if (channelIndices.length === 0) {
@@ -121,7 +126,7 @@ export function applyConvolution(
               }
             }
             // Нормализуем и записываем
-            const val = sum / divisor;
+            const val = sum / divisor + offset;
             dd[dstIdx + ch] = Math.max(0, Math.min(255, Math.round(val)));
           }
           // Альфа-канал всегда копируется без изменений (уже есть в dst, т.к. создали из sd)

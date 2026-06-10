@@ -104,10 +104,12 @@
   border-radius: 3px;
   outline: none;
   width: 100%;
+  appearance: textfield;
   -moz-appearance: textfield;
 }
 .cv-kernel-cell::-webkit-inner-spin-button,
 .cv-kernel-cell::-webkit-outer-spin-button {
+  appearance: none;
   -webkit-appearance: none;
   margin: 0;
 }
