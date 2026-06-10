@@ -59,8 +59,11 @@ export default function ConvolutionDialog({
   // Превью при изменении параметров
   useEffect(() => {
     if (!preview || !originalImgData || !open) return;
-    const result = applyConvolution(originalImgData, kernel, applyChannels, edge);
-    onPreview(result);
+    let isActive = true;
+    applyConvolution(originalImgData, kernel, applyChannels, edge).then(result => {
+      if (isActive) onPreview(result);
+    });
+    return () => { isActive = false; };
   }, [preview, kernel, applyChannels, edge, originalImgData, open, onPreview]);
 
   const handlePresetChange = useCallback((idx: number) => {
@@ -92,12 +95,9 @@ export default function ConvolutionDialog({
   const handleApply = useCallback(() => {
     if (!originalImgData) return;
     setProcessing(true);
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        const result = applyConvolution(originalImgData, kernel, applyChannels, edge);
-        onApply(result);
-        setProcessing(false);
-      }, 10);
+    applyConvolution(originalImgData, kernel, applyChannels, edge).then(result => {
+      onApply(result);
+      setProcessing(false);
     });
   }, [originalImgData, kernel, applyChannels, edge, onApply]);
 

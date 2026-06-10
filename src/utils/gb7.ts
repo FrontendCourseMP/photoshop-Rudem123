@@ -159,3 +159,11 @@ export function encodeGB7(imageData: ImageData, useMask: boolean): Blob {
 
     return new Blob([buffer], { type: "application/octet-stream" });
 }
+
+export function getGB7Depth(buffer: ArrayBuffer): { depth: string, channels: number } {
+    const bytes = new Uint8Array(buffer);
+    if (buffer.byteLength < 6) return { depth: '7 бит', channels: 1 };
+    const flag = bytes[5];
+    const hasMask = (flag & 1) === 1;
+    return hasMask ? { depth: '8 бит', channels: 2 } : { depth: '7 бит', channels: 1 };
+}

@@ -84,10 +84,10 @@ function LevelsSlider({ ch, onChange }: SliderProps) {
       const val = valFromMouse(e.clientX);
       if (activeDrag === 'black') {
         const nb = Math.min(val, w - 2);
-        cb({ inBlack: nb, inGamma: displayValToGamma(nb, w, gdv) });
+        cb({ inBlack: nb });
       } else if (activeDrag === 'white') {
         const nw = Math.max(val, b + 2);
-        cb({ inWhite: nw, inGamma: displayValToGamma(b, nw, gdv) });
+        cb({ inWhite: nw });
       } else {
         const clamped = Math.max(b + 1, Math.min(w - 1, val));
         cb({ inGamma: displayValToGamma(b, w, clamped) });
@@ -257,15 +257,13 @@ export default function LevelsDialog({ open, originalImgData, onPreview, onApply
       <div className="lv-inputs-row">
         <NumInput value={ch.inBlack} min={0} max={254} onChange={v => {
           const nb = Math.min(v, ch.inWhite - 2);
-          const newGamma = displayValToGamma(nb, ch.inWhite, gammaToDisplayVal(ch.inBlack, ch.inWhite, ch.inGamma));
-          updateChannel({ inBlack: nb, inGamma: newGamma });
+          updateChannel({ inBlack: nb });
         }} />
         <NumInput value={ch.inGamma} min={0.10} max={9.99} step={0.01}
           onChange={v => updateChannel({ inGamma: v })} />
         <NumInput value={ch.inWhite} min={1} max={255} onChange={v => {
           const nw = Math.max(v, ch.inBlack + 2);
-          const newGamma = displayValToGamma(ch.inBlack, nw, gammaToDisplayVal(ch.inBlack, ch.inWhite, ch.inGamma));
-          updateChannel({ inWhite: nw, inGamma: newGamma });
+          updateChannel({ inWhite: nw });
         }} />
       </div>
 

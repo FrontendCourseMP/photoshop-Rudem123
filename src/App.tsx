@@ -1,5 +1,6 @@
 import { type ChangeEvent, type MouseEvent as ReactMouseEvent, useRef, useState, useEffect, useCallback } from 'react';
-import { decodeGB7, encodeGB7 } from './utils/gb7';
+import { decodeGB7, encodeGB7, getGB7Depth } from './utils/gb7';
+import { getImageDepth } from './utils/metadata';
 import { type InterpolationMethod, resizeImageData, INTERPOLATION_METHODS, INTERPOLATION_KEYS } from './utils/interpolation';
 import {
   Pipette, ZoomIn, ZoomOut, Download
@@ -13,6 +14,7 @@ interface ImageMeta {
   width: number;
   height: number;
   depth: string;
+  channels: number;
 }
 
 function rgbToLab(r: number, g: number, b: number) {
@@ -42,9 +44,7 @@ function App() {
   const [meta, setMeta] = useState<ImageMeta | null>(null);
   const [filename, setFilename] = useState<string>('Без имени-1');
 
-  // ВАЖНО: Мы храним ImageData в useRef, а не в useState!
-  // Если положить гигантский массив пикселей в useState, расширение React DevTools 
-  // в браузере попытается его сериализовать для инспектора, что вызывает зависание на 8-10 секунд.
+  // Храним ImageData в useRef для производительности (без ререндеров и сериализации)
   const originalImgDataRef = useRef<ImageData | null>(null);
   const [imgVersion, setImgVersion] = useState(0);
 
@@ -92,10 +92,10 @@ function App() {
     event.target.value = '';
     setFilename(file.name);
 
-    const applyImage = (imageData: ImageData, depth: string) => {
+    const applyImage = (imageData: ImageData, depth: string, channels: number) => {
       setOriginalImgData(imageData);
       setChannels({ r: true, g: true, b: true, a: true });
-      setMeta({ width: imageData.width, height: imageData.height, depth });
+      setMeta({ width: imageData.width, height: imageData.height, depth, channels });
       // Auto-fit: подгоняем изображение под workspace с отступами 50px
       setZoom(computeAutoFitZoom(imageData.width, imageData.height));
     };
@@ -103,13 +103,18 @@ function App() {
     if (file.name.toLowerCase().endsWith('.gb7')) {
       const buffer = await file.arrayBuffer();
       try {
-        applyImage(decodeGB7(buffer), '8 бит (GB7)');
+        const info = getGB7Depth(buffer);
+        applyImage(decodeGB7(buffer), info.depth, info.channels);
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Ошибка чтения GB7');
       }
     } else {
+      const buffer = await file.arrayBuffer();
+      const info = getImageDepth(buffer, file.type);
+
       const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
+      const blob = new Blob([buffer], { type: file.type });
+      const objectUrl = URL.createObjectURL(blob);
       img.onload = () => {
         const off = document.createElement('canvas');
         off.width = img.width;
@@ -117,7 +122,7 @@ function App() {
         const offCtx = off.getContext('2d');
         if (!offCtx) return;
         offCtx.drawImage(img, 0, 0);
-        applyImage(offCtx.getImageData(0, 0, img.width, img.height), '32 бит (RGBA)');
+        applyImage(offCtx.getImageData(0, 0, img.width, img.height), info.depth, info.channels);
         URL.revokeObjectURL(objectUrl);
       };
       img.onerror = () => {
@@ -128,9 +133,7 @@ function App() {
     }
   };
 
-  // Скачивание и сохранение файла
-  // ВАЖНО: экспортируем из originalImgData, а НЕ с canvas, т.к. canvas
-  // может содержать отфильтрованные каналы (R/G/B обнулены).
+  // Экспорт оригинальных данных (без учета отключенных каналов)
   const handleDownload = (format: 'png' | 'jpeg' | 'gb7-mask' | 'gb7-nomask') => {
     if (!originalImgData || !meta) return;
 
@@ -182,7 +185,13 @@ function App() {
     if (!ctx) return;
 
     // 1. Применяем канальный фильтр на оригинальных данных (только если нужно)
-    const allChannels = channels.r && channels.g && channels.b && channels.a;
+    const ch = meta?.channels || 4;
+    let allChannels = false;
+    if (ch === 1) allChannels = channels.r;
+    else if (ch === 2) allChannels = channels.r && channels.a;
+    else if (ch === 3) allChannels = channels.r && channels.g && channels.b;
+    else allChannels = channels.r && channels.g && channels.b && channels.a;
+
     let sourceForResize = originalImgData;
 
     if (!allChannels) {
@@ -192,7 +201,8 @@ function App() {
         originalImgData.height
       );
 
-      const onlyAlpha = !channels.r && !channels.g && !channels.b && channels.a;
+      const onlyAlpha = (ch === 2 && !channels.r && channels.a) || (ch === 4 && !channels.r && !channels.g && !channels.b && channels.a);
+      
       for (let i = 0; i < sourceForResize.data.length; i += 4) {
         if (onlyAlpha) {
           const a = originalImgData.data[i + 3];
@@ -201,10 +211,19 @@ function App() {
           sourceForResize.data[i + 2] = a;
           sourceForResize.data[i + 3] = 255;
         } else {
-          if (!channels.r) sourceForResize.data[i] = 0;
-          if (!channels.g) sourceForResize.data[i + 1] = 0;
-          if (!channels.b) sourceForResize.data[i + 2] = 0;
-          if (!channels.a) sourceForResize.data[i + 3] = 255;
+          if (ch <= 2) {
+            if (!channels.r) {
+               sourceForResize.data[i] = 0;
+               sourceForResize.data[i+1] = 0;
+               sourceForResize.data[i+2] = 0;
+            }
+            if (ch === 2 && !channels.a) sourceForResize.data[i+3] = 255;
+          } else {
+            if (!channels.r) sourceForResize.data[i] = 0;
+            if (!channels.g) sourceForResize.data[i + 1] = 0;
+            if (!channels.b) sourceForResize.data[i + 2] = 0;
+            if (ch === 4 && !channels.a) sourceForResize.data[i + 3] = 255;
+          }
         }
       }
     }
@@ -231,20 +250,11 @@ function App() {
     const thumbW = Math.max(1, Math.floor(originalImgData.width * scale));
     const thumbH = Math.max(1, Math.floor(originalImgData.height * scale));
 
-    const off = document.createElement('canvas');
-    off.width = originalImgData.width;
-    off.height = originalImgData.height;
-    off.getContext('2d')!.putImageData(originalImgData, 0, 0);
-
-    const small = document.createElement('canvas');
-    small.width = thumbW;
-    small.height = thumbH;
-    const smallCtx = small.getContext('2d')!;
-    smallCtx.drawImage(off, 0, 0, thumbW, thumbH);
-    const baseThumbData = smallCtx.getImageData(0, 0, thumbW, thumbH);
+    // Быстрый даунскейл для миниатюр
+    const baseThumbData = resizeImageData(originalImgData, thumbW, thumbH, 'nearest');
 
     // 2. Функция применения фильтра к заранее уменьшенной картинке
-    const drawThumb = (ref: React.RefObject<HTMLCanvasElement | null>, type: 'r' | 'g' | 'b' | 'a') => {
+    const drawThumb = (ref: React.RefObject<HTMLCanvasElement | null>, type: 'r' | 'g' | 'b' | 'a' | 'gray') => {
       const canvas = ref.current;
       if (!canvas) return;
       canvas.width = thumbW;
@@ -259,7 +269,9 @@ function App() {
       );
 
       for (let i = 0; i < thumbData.data.length; i += 4) {
-        if (type === 'r') {
+        if (type === 'gray') {
+          thumbData.data[i + 3] = 255;
+        } else if (type === 'r') {
           thumbData.data[i + 1] = 0; thumbData.data[i + 2] = 0; thumbData.data[i + 3] = 255;
         } else if (type === 'g') {
           thumbData.data[i] = 0; thumbData.data[i + 2] = 0; thumbData.data[i + 3] = 255;
@@ -274,11 +286,17 @@ function App() {
       ctx.putImageData(thumbData, 0, 0);
     }
 
-    drawThumb(rCanvasRef, 'r');
-    drawThumb(gCanvasRef, 'g');
-    drawThumb(bCanvasRef, 'b');
-    drawThumb(aCanvasRef, 'a');
-  }, [activeRightTab, imgVersion]);
+    if (meta?.channels === 1 || meta?.channels === 2) {
+      drawThumb(rCanvasRef, 'gray');
+    } else {
+      drawThumb(rCanvasRef, 'r');
+      drawThumb(gCanvasRef, 'g');
+      drawThumb(bCanvasRef, 'b');
+    }
+    if (meta?.channels === 2 || meta?.channels === 4) {
+      drawThumb(aCanvasRef, 'a');
+    }
+  }, [activeRightTab, imgVersion, meta?.channels]);
 
   const handleCanvasClick = (e: ReactMouseEvent<HTMLCanvasElement>) => {
     if (activeTool === 'pipette') {
@@ -316,8 +334,7 @@ function App() {
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
     const src = data ?? current;
-    // Масштабируем preview данные под текущий зум
-    // Используем nearest для превью, чтобы ползунки уровней работали плавно без фризов
+    // Масштабируем превью под текущий зум
     const scaledW = canvasRef.current.width;
     const scaledH = canvasRef.current.height;
     const scaled = resizeImageData(src, scaledW, scaledH, 'nearest');
@@ -339,7 +356,7 @@ function App() {
   // ─── Callback для ResizeDialog ─────────────────────────────────────────────
   const handleResizeApply = useCallback((data: ImageData) => {
     setOriginalImgData(data);
-    setMeta({ width: data.width, height: data.height, depth: meta?.depth ?? '32 бит (RGBA)' });
+    setMeta({ width: data.width, height: data.height, depth: meta?.depth ?? '32 бит (RGBA)', channels: meta?.channels ?? 4 });
     setResizeOpen(false);
   }, [meta?.depth]);
 
@@ -502,22 +519,34 @@ function App() {
                 </div>
               ) : (
                 <div className="ps-channels-list">
-                  <div className={`ps-channel-item ${!channels.r ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, r: !c.r }))}>
-                    <canvas ref={rCanvasRef} className="ps-channel-thumb"></canvas>
-                    <span className="ps-channel-name">Красный (R)</span>
-                  </div>
-                  <div className={`ps-channel-item ${!channels.g ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, g: !c.g }))}>
-                    <canvas ref={gCanvasRef} className="ps-channel-thumb"></canvas>
-                    <span className="ps-channel-name">Зеленый (G)</span>
-                  </div>
-                  <div className={`ps-channel-item ${!channels.b ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, b: !c.b }))}>
-                    <canvas ref={bCanvasRef} className="ps-channel-thumb"></canvas>
-                    <span className="ps-channel-name">Синий (B)</span>
-                  </div>
-                  <div className={`ps-channel-item ${!channels.a ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, a: !c.a }))}>
-                    <canvas ref={aCanvasRef} className="ps-channel-thumb"></canvas>
-                    <span className="ps-channel-name">Альфа (A)</span>
-                  </div>
+                  {meta && (meta.channels === 1 || meta.channels === 2) && (
+                    <div className={`ps-channel-item ${!channels.r ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, r: !c.r }))}>
+                      <canvas ref={rCanvasRef} className="ps-channel-thumb"></canvas>
+                      <span className="ps-channel-name">Серый (Gray)</span>
+                    </div>
+                  )}
+                  {meta && (meta.channels === 3 || meta.channels === 4) && (
+                    <>
+                      <div className={`ps-channel-item ${!channels.r ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, r: !c.r }))}>
+                        <canvas ref={rCanvasRef} className="ps-channel-thumb"></canvas>
+                        <span className="ps-channel-name">Красный (R)</span>
+                      </div>
+                      <div className={`ps-channel-item ${!channels.g ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, g: !c.g }))}>
+                        <canvas ref={gCanvasRef} className="ps-channel-thumb"></canvas>
+                        <span className="ps-channel-name">Зеленый (G)</span>
+                      </div>
+                      <div className={`ps-channel-item ${!channels.b ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, b: !c.b }))}>
+                        <canvas ref={bCanvasRef} className="ps-channel-thumb"></canvas>
+                        <span className="ps-channel-name">Синий (B)</span>
+                      </div>
+                    </>
+                  )}
+                  {meta && (meta.channels === 2 || meta.channels === 4) && (
+                    <div className={`ps-channel-item ${!channels.a ? 'disabled' : ''}`} onClick={() => setChannels(c => ({ ...c, a: !c.a }))}>
+                      <canvas ref={aCanvasRef} className="ps-channel-thumb"></canvas>
+                      <span className="ps-channel-name">Альфа (A)</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
